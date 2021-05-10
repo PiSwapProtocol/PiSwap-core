@@ -468,24 +468,22 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
 
     /// @notice returns current token purchase price
     /// @dev              does not take fee into consideration
-    /// @param _tokenType bull or bear token
     /// @param _amount    amount of ETH in
     /// @return           amount of tokens out
-    function tokenPricePurchase(TokenType _tokenType, uint256 _amount) public view returns (uint256) {
+    function tokenPricePurchase(uint256 _amount) public view returns (uint256) {
         _amount = (_amount * marketProfit()) / 1 ether;
         uint256 supplyAfterPurchase = tokenFormula(depositedEth + _amount);
-        uint256 currentSupply = registry.getTotalSupply(address(this), _tokenType);
+        uint256 currentSupply = registry.getTotalSupply(address(this), TokenType.BULL);
         return supplyAfterPurchase - currentSupply;
     }
 
     /// @notice returns current token redemption price
     /// @dev              does not take fee into consideration
-    /// @param _tokenType bull or bear token
     /// @param _amount    amount of tokens in
     /// @return           amount of ETH out
-    function tokenPriceRedemption(TokenType _tokenType, uint256 _amount) public view returns (uint256) {
+    function tokenPriceRedemption(uint256 _amount) public view returns (uint256) {
         uint256 depositedEthAfterSell =
-            inverseTokenFormula(registry.getTotalSupply(address(this), _tokenType) - _amount);
+            inverseTokenFormula(registry.getTotalSupply(address(this), TokenType.BULL) - _amount);
         uint256 amountEth = depositedEth - depositedEthAfterSell;
         return (amountEth * marketProfit()) / 1 ether;
     }
