@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.0;
+pragma solidity 0.8.4;
 
 /// @notice Contract module that disallows calling a function if a certain function has been called beforehand
 abstract contract FlashLoanProtector {

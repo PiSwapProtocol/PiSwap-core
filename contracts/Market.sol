@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.0;
+pragma solidity 0.8.4;
 
 import "./Types.sol";
 import "./FlashLoanProtector.sol";
@@ -77,12 +77,24 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         nftType = _nftType;
     }
 
+    // TODO
+
+    modifier ensure(_deadline) {
+        require(block.timestamp < _deadline, "expired");
+        _;
+    }
+
     /// @notice purchase tokens from the contract
     /// @dev              in case the market is at a loss / profit, it is evened out using the marketProfit function
     /// @param _minTokens minimum desired amount to receive after purchase (amount x provided means x bull tokens and x bear tokens)
     /// @param _deadline  time after which the transaction should not be executed anymore
-    function purchaseTokens(uint256 _minTokens, uint256 _deadline) public payable nonReentrant FLprotected {
-        require(block.timestamp < _deadline, "expired");
+    function purchaseTokens(uint256 _minTokens, uint256 _deadline)
+        public
+        payable
+        ensure(_deadline)
+        nonReentrant
+        FLprotected
+    {
         uint256 amountEth = msg.value;
         uint256 fee = (amountEth * 3) / 1000;
         // if transfer to owner token unsuccessful, don't collect fee
@@ -111,8 +123,7 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         uint256 _amount,
         uint256 _minEth,
         uint256 _deadline
-    ) public nonReentrant FLprotected {
-        require(block.timestamp < _deadline, "expired");
+    ) public ensure(_deadline) nonReentrant FLprotected {
         uint256 depositedEthAfterSell =
             inverseTokenFormula(registry.getTotalSupply(address(this), TokenType.BULL) - _amount);
         uint256 amountEth = depositedEth - depositedEthAfterSell;
@@ -142,8 +153,7 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         uint256 _maxBullTokens,
         uint256 _maxBearTokens,
         uint256 _deadline
-    ) public payable nonReentrant FLprotected returns (uint256) {
-        require(block.timestamp < _deadline, "expired");
+    ) public payable ensure(_deadline) nonReentrant FLprotected returns (uint256) {
         uint256 bullId = getTokenId(TokenType.BULL);
         uint256 bearId = getTokenId(TokenType.BEAR);
         uint256 liquiditySupply = registry.getTotalSupply(address(this), TokenType.LIQUIDITY);
@@ -196,6 +206,7 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         uint256 _deadline
     )
         public
+        ensure(_deadline)
         nonReentrant
         FLprotected
         returns (
@@ -204,7 +215,6 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
             uint256 amountBear
         )
     {
-        require(block.timestamp < _deadline, "expired");
         uint256 liquiditySupply = registry.getTotalSupply(address(this), TokenType.LIQUIDITY);
         require(liquiditySupply > 0);
         (uint256 bullId, uint256 bearId, uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
@@ -231,8 +241,7 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         TokenType _tokenType,
         uint256 _minTokens,
         uint256 _deadline
-    ) public payable nonReentrant FLprotected returns (uint256 tokensOut) {
-        require(block.timestamp < _deadline, "expired");
+    ) public payable ensure(_deadline) nonReentrant FLprotected returns (uint256 tokensOut) {
         require(msg.value > 0);
         require(_tokenType != TokenType.LIQUIDITY, "Cannot swap liquidity token");
 
@@ -266,8 +275,7 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         uint256 _amount,
         uint256 _minEth,
         uint256 _deadline
-    ) public nonReentrant FLprotected returns (uint256 ethOut) {
-        require(block.timestamp < _deadline, "expired");
+    ) public ensure(_deadline) nonReentrant FLprotected returns (uint256 ethOut) {
         require(_amount > 0);
         require(_tokenType != TokenType.LIQUIDITY, "Cannot swap liquidity token");
 
@@ -295,8 +303,7 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
     /// @dev    if contract holds NFT, it should be purchasable at all times
     /// @param _deadline time after which the transaction should not be executed anymore
     /// @param _amount   amount of NFT Tokens to swap (ERC1155 only)
-    function buyNFT(uint256 _deadline, uint256 _amount) public payable nonReentrant FLprotected {
-        require(block.timestamp < _deadline, "expired");
+    function buyNFT(uint256 _deadline, uint256 _amount) public payable ensure(_deadline) nonReentrant FLprotected {
         uint256 nftValue = NFTValue();
         if (nftType == NFTType.ERC721) {
             require(msg.value >= nftValue, "Slippage");
@@ -322,8 +329,7 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         uint256 _minEth,
         uint256 _deadline,
         uint256 _amount
-    ) public nonReentrant FLprotected {
-        require(block.timestamp < _deadline, "expired");
+    ) public ensure(_deadline) nonReentrant FLprotected {
         (, , uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
         require(ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
         uint256 nftValue = _NFTValue(bullReserve, bearReserve);
