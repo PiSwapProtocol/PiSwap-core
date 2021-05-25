@@ -65,6 +65,11 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
     event NFTPurchase(address indexed buyer, uint256 nftValue, uint256 amount);
     event NFTSell(address indexed seller, uint256 nftValue, uint256 amount);
 
+    modifier ensure(uint256 _deadline) {
+        require(block.timestamp < _deadline, "expired");
+        _;
+    }
+
     constructor(
         address _tokenAddress,
         uint256 _tokenId,
@@ -75,13 +80,6 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         NFTtokenAddress = _tokenAddress;
         NFTtokenId = _tokenId;
         nftType = _nftType;
-    }
-
-    // TODO
-
-    modifier ensure(_deadline) {
-        require(block.timestamp < _deadline, "expired");
-        _;
     }
 
     /// @notice purchase tokens from the contract
@@ -206,7 +204,6 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         uint256 _deadline
     )
         public
-        ensure(_deadline)
         nonReentrant
         FLprotected
         returns (
@@ -215,6 +212,8 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
             uint256 amountBear
         )
     {
+        // cannot use modifier here, stack too deep
+        require(block.timestamp < _deadline, "expired");
         uint256 liquiditySupply = registry.getTotalSupply(address(this), TokenType.LIQUIDITY);
         require(liquiditySupply > 0);
         (uint256 bullId, uint256 bearId, uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
