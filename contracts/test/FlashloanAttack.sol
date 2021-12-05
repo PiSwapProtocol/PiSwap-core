@@ -2,20 +2,8 @@
 pragma solidity 0.8.4;
 
 import "../Market.sol";
-
-interface ERC1155 {
-    function setApprovalForAll(address operator, bool _approved) external;
-}
-
-interface ERC721 {
-    function setApprovalForAll(address operator, bool _approved) external;
-
-    function transferFrom(
-        address from,
-        address to,
-        uint256 tokenId
-    ) external;
-}
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 
 contract FlashloanAttackA is ERC1155Holder, ERC721Holder {
     ERC721 NFT;

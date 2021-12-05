@@ -1,4 +1,8 @@
-module.exports = {
+import { ethers } from 'hardhat';
+
+const afterFee1Eth = ethers.utils.parseEther('1').mul(1000).div(997);
+
+export default {
   errorMessages: {
     marketAlreadyExists: 'Market already exists',
     disallowContract: 'Cannot create market for this contract',
@@ -16,6 +20,7 @@ module.exports = {
     insufficientLiquidity: 'Insufficient liquidity',
     swappingNotEnabled: 'NFT swapping not enabled',
     flashloanProtection: 'Flash loan protection',
+    burnInsufficientBalance: 'ERC1155: burn amount exceeds balance',
   },
   tokenType: {
     BULL: 0,
@@ -27,11 +32,11 @@ module.exports = {
     ERC1155: 1,
   },
   after1Eth: '9900990099009900990100',
-  afterFee1Eth: '1003009027081243731',
+  afterFee1Eth,
   afterFee5000Tokens: '5015045135406218655968',
-  feeFor1Eth: '3009027081243731',
+  feeFor1Eth: afterFee1Eth.sub(ethers.utils.parseEther('1')),
   tokensFor1Eth: '9900990099009900990100',
   zeroAddress: '0x0000000000000000000000000000000000000000',
-  maxUint: '115792089237316195423570985008687907853269984665640564039457584007913129639935',
+  maxUint: ethers.constants.MaxUint256.toString(),
   unix2100: 4102444800,
 };

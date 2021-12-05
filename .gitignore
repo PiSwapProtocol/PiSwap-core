@@ -108,3 +108,8 @@ dist
 build/
 
 frp/
+
+# hardhat
+artifacts/
+typechain-types/
+cache/
