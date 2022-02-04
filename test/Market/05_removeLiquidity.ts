@@ -2,7 +2,7 @@ import { BigNumber } from '@ethersproject/bignumber';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { Market, Proxy, TokenRegistry } from '../../typechain-types';
+import { Market, ProxyTest, TokenRegistry } from '../../typechain-types';
 import c from '../constants';
 import { deployProxy, setupWithERC721 } from '../utils';
 
@@ -18,7 +18,7 @@ describe('Market', async () => {
     let bullTokenId: BigNumber;
     let bearTokenId: BigNumber;
     let LiquidityTokenId: BigNumber;
-    let proxy: Proxy;
+    let proxy: ProxyTest;
 
     before(async () => {
       [registry, market] = await setupWithERC721();

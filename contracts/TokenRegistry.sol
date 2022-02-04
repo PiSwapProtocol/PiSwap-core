@@ -2,8 +2,11 @@
 pragma solidity 0.8.11;
 
 import "./Types.sol";
+
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155SupplyUpgradeable.sol";
-import "@openzeppelin/contracts/proxy/Clones.sol";
+import "./lib/BeaconUpgradeable.sol";
+
+import "./lib/BeaconProxyOptimized.sol";
 
 interface IMarket {
     function initialize(
@@ -24,27 +27,20 @@ struct NFT {
 /// @title  Token Registry
 /// @notice Implements the ERC1155 token standard and deploys new markets
 /// @dev    Due to the contract size limitations, a separate contract deploys the market contracts
-contract TokenRegistry is ERC1155SupplyUpgradeable {
-    address public owner;
-    address public marketImplementation;
+contract TokenRegistry is BeaconUpgradeable, ERC1155SupplyUpgradeable {
     // market address => token data
     mapping(address => NFT) public nftInfo;
+    // nft contract address => token id => market address
+    mapping(address => mapping(uint256 => address)) public markets;
 
     uint8 public constant decimals = 18;
     uint256 public priceImpact;
-    address private _proposedOwner;
 
     event MarketCreated(address indexed market, address indexed NFTContract, uint256 indexed tokenId);
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event PriceImpactChange(uint256 indexed oldPriceImpact, uint256 indexed newPriceImpact);
 
     modifier onlyMarket() {
-        require(nftInfo[msg.sender].tokenAddress != address(0), "Only callable by markets");
-        _;
-    }
-
-    modifier onlyOwner() {
-        require(owner == msg.sender, "Ownable: caller is not the owner");
+        require(nftInfo[_msgSender()].tokenAddress != address(0), "Only callable by markets");
         _;
     }
 
@@ -53,10 +49,10 @@ contract TokenRegistry is ERC1155SupplyUpgradeable {
         address _marketImplementation,
         string memory _uri
     ) external initializer {
+        __Owned_init(_owner);
+        __Beacon_init(_marketImplementation);
         __ERC1155_init(_uri);
         __ERC1155Supply_init();
-        owner = _owner;
-        marketImplementation = _marketImplementation;
         priceImpact = 10 ether;
     }
 
@@ -65,14 +61,15 @@ contract TokenRegistry is ERC1155SupplyUpgradeable {
     /// @param _tokenId          Id of the NFT
     /// @return market           the address of the deployed market contract
     function createMarket(address _tokenAddress, uint256 _tokenId) external returns (address market) {
-        require(!marketExists(_tokenAddress, _tokenId), "Market already exists");
+        require(markets[_tokenAddress][_tokenId] == address(0), "Market already exists");
         require(_tokenAddress != address(this), "Cannot create market for this contract");
         NFT memory data = NFT({tokenAddress: _tokenAddress, tokenId: _tokenId});
 
         // deploy market contract
         NFTType nftType = _getNFTType(_tokenAddress);
-        bytes32 salt = keccak256(abi.encodePacked(_tokenAddress, _tokenId, block.chainid));
-        market = Clones.cloneDeterministic(marketImplementation, salt);
+        market = address(new BeaconProxyOptimized());
+        markets[_tokenAddress][_tokenId] = market;
+
         IMarket(market).initialize(_tokenAddress, _tokenId, address(this), nftType);
 
         // register token
@@ -82,25 +79,9 @@ contract TokenRegistry is ERC1155SupplyUpgradeable {
     }
 
     function marketExists(address _tokenAddress, uint256 _tokenId) public view returns (bool) {
-        address market = getMarketAddress(_tokenAddress, _tokenId);
+        address market = markets[_tokenAddress][_tokenId];
         NFT memory data = nftInfo[market];
         return data.tokenAddress != address(0);
-    }
-
-    function getMarketAddress(address _tokenAddress, uint256 _tokenId) public view returns (address) {
-        bytes32 salt = keccak256(abi.encodePacked(_tokenAddress, _tokenId, block.chainid));
-        return Clones.predictDeterministicAddress(marketImplementation, salt);
-    }
-
-    // TODO comment and test
-    function proposeNewOwner(address _newOwner) public onlyOwner {
-        _proposedOwner = _newOwner;
-    }
-
-    function claimOwnership() public {
-        require(msg.sender == _proposedOwner, "Ownable: only callable by proposed owner");
-        emit OwnershipTransferred(owner, _proposedOwner);
-        owner = _proposedOwner;
     }
 
     function setPriceImpact(uint256 _newImpact) public onlyOwner {
@@ -127,7 +108,7 @@ contract TokenRegistry is ERC1155SupplyUpgradeable {
         TokenType _tokenType
     ) public onlyMarket {
         require(_amount > 0, "Amount can't be zero");
-        uint256 tokenId = getTokenId(msg.sender, _tokenType);
+        uint256 tokenId = getTokenId(_msgSender(), _tokenType);
         _mint(_to, tokenId, _amount, "");
     }
 
@@ -142,7 +123,7 @@ contract TokenRegistry is ERC1155SupplyUpgradeable {
         TokenType _tokenType
     ) public onlyMarket {
         require(_amount > 0, "Amount can't be zero");
-        uint256 tokenId = getTokenId(msg.sender, _tokenType);
+        uint256 tokenId = getTokenId(_msgSender(), _tokenType);
         _burn(_from, tokenId, _amount);
     }
 
@@ -156,4 +137,6 @@ contract TokenRegistry is ERC1155SupplyUpgradeable {
             revert("Unsupported smart contract");
         }
     }
+
+    uint256[50] private __gap;
 }

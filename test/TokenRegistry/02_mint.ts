@@ -14,7 +14,7 @@ describe('TokenRegistry', async () => {
   describe('minting', async () => {
     let registry: TokenRegistry;
     before(async () => {
-      registry = await deployTokenRegistry(accounts[0].address, accounts[1].address);
+      registry = await deployTokenRegistry(accounts[0].address);
     });
     it('should not be able to mint tokens from non market accounts', async () => {
       await expect(registry.mint(accounts[1].address, 1, c.tokenType.BULL)).to.be.revertedWith(

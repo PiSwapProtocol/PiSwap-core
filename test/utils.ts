@@ -1,6 +1,6 @@
 import { ContractTransaction } from '@ethersproject/contracts';
 import { ethers, upgrades } from 'hardhat';
-import { ERC1155, ERC165, ERC721, Market, Market__factory, Proxy, TokenRegistry } from '../typechain-types';
+import { ERC1155, ERC165, ERC721, Market, Market__factory, ProxyTest, TokenRegistry } from '../typechain-types';
 
 export const setupWithERC721 = async (ownerAddress?: string): Promise<[TokenRegistry, Market, ERC721]> => {
   const token = await deployERC721();
@@ -33,8 +33,8 @@ export const deployTokenRegistry = async (ownerAddress?: string, implementation?
   return upgrades.deployProxy(factory, [ownerAddress, implementation, '']) as Promise<TokenRegistry>;
 };
 
-export const deployProxy = async (marketAddress?: string): Promise<Proxy> => {
-  return (await ethers.getContractFactory('Proxy')).deploy(marketAddress ?? ethers.constants.AddressZero);
+export const deployProxy = async (marketAddress?: string): Promise<ProxyTest> => {
+  return (await ethers.getContractFactory('ProxyTest')).deploy(marketAddress ?? ethers.constants.AddressZero);
 };
 
 export const deployERC165 = async (): Promise<ERC165> => {
