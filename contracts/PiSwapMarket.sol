@@ -1,50 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.11;
 
-import "./Types.sol";
+import "./interfaces/IPiSwapMarket.sol";
+import "./interfaces/IPiSwapRegistry.sol";
+
 import "@openzeppelin/contracts-upgradeable/token/ERC721/utils/ERC721HolderUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/utils/ERC1155HolderUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
-interface IERC721_ {
-    function safeTransferFrom(
-        address from,
-        address to,
-        uint256 tokenId,
-        bytes calldata data
-    ) external;
-}
-
-interface IERC1155_ {
-    function safeTransferFrom(
-        address from,
-        address to,
-        uint256 id,
-        uint256 amount,
-        bytes calldata data
-    ) external;
-}
-
-interface ITokenRegistry {
-    function owner() external view returns (address);
-
-    function totalSupply(uint256 id) external view returns (uint256);
-
-    // prettier-ignore
-    function mint(address _to, uint256 _amount, TokenType _tokenType) external;
-
-    // prettier-ignore
-    function burn(address _from, uint256 _amount, TokenType _tokenType) external;
-
-    function balanceOf(address account, uint256 id) external view returns (uint256);
-
-    // prettier-ignore
-    function safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes memory data) external;
-}
-
-contract PiSwapMarket is Initializable, ERC1155HolderUpgradeable, ERC721HolderUpgradeable, ReentrancyGuardUpgradeable {
-    ITokenRegistry public registry;
+contract PiSwapMarket is
+    Initializable,
+    ERC1155HolderUpgradeable,
+    ERC721HolderUpgradeable,
+    ReentrancyGuardUpgradeable,
+    IPiSwapMarket
+{
+    IPiSwapRegistry public registry;
     address public NFTtokenAddress;
     uint256 public NFTtokenId;
     NFTType public nftType;
@@ -77,7 +49,7 @@ contract PiSwapMarket is Initializable, ERC1155HolderUpgradeable, ERC721HolderUp
         __ERC1155Holder_init();
         __ERC721Holder_init();
         __ReentrancyGuard_init();
-        registry = ITokenRegistry(_registry);
+        registry = IPiSwapRegistry(_registry);
         NFTtokenAddress = _tokenAddress;
         NFTtokenId = _tokenId;
         nftType = _nftType;
