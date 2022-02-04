@@ -1,12 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.4;
+pragma solidity 0.8.11;
 
 import "./Types.sol";
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import "@openzeppelin/contracts/proxy/Clones.sol";
 
-interface IMarketFactory {
-    function deployMarket(address _tokenAddress, uint256 _tokenId) external returns (address market);
+interface IMarket {
+    function initialize(
+        address _tokenAddress,
+        uint256 _tokenId,
+        address _registry,
+        NFTType _nftType
+    ) external;
 }
+
+// TODO implement beneficiary
 
 /// @title  Token Registry
 /// @notice Implements the ERC1155 token standard and deploys new markets
@@ -18,7 +26,7 @@ contract TokenRegistry is ERC1155 {
     }
 
     address public owner;
-    IMarketFactory public factory;
+    address public marketImplementation;
     // market address => token data
     mapping(address => TokenData) public tokenData;
     // nft contract address => token id => market address
@@ -33,7 +41,7 @@ contract TokenRegistry is ERC1155 {
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event PriceImpactChange(uint256 indexed oldPriceImpact, uint256 indexed newPriceImpact);
 
-    modifier onlyMarket {
+    modifier onlyMarket() {
         require(tokenData[msg.sender].NFTContract != address(0), "Only callable by markets");
         _;
     }
@@ -45,29 +53,40 @@ contract TokenRegistry is ERC1155 {
 
     constructor(
         address _owner,
-        address _factory,
+        address _marketImplementation,
         string memory _uri
     ) ERC1155(_uri) {
         owner = _owner;
-        factory = IMarketFactory(_factory);
+        marketImplementation = _marketImplementation;
     }
 
     /// @notice Creates a new market for a specified NFT
-    /// @param _NFTContract      address of the NFT token contract
+    /// @param _tokenAddress     address of the NFT token contract
     /// @param _tokenId          Id of the NFT
     /// @return market           the address of the deployed market contract
-    function createMarket(address _NFTContract, uint256 _tokenId) external returns (address market) {
-        require(markets[_NFTContract][_tokenId] == address(0), "Market already exists");
-        require(_NFTContract != address(this), "Cannot create market for this contract");
-        TokenData memory data = TokenData({NFTContract: _NFTContract, tokenId: _tokenId});
+    function createMarket(address _tokenAddress, uint256 _tokenId) external returns (address market) {
+        require(markets[_tokenAddress][_tokenId] == address(0), "Market already exists");
+        require(_tokenAddress != address(this), "Cannot create market for this contract");
+        TokenData memory data = TokenData({NFTContract: _tokenAddress, tokenId: _tokenId});
         // deploy market contract
-        market = factory.deployMarket(_NFTContract, _tokenId);
+        NFTType nftType;
+        IERC165 token = IERC165(_tokenAddress);
+        if (token.supportsInterface(0x80ac58cd)) {
+            nftType = NFTType.ERC721;
+        } else if (token.supportsInterface(0xd9b67a26)) {
+            nftType = NFTType.ERC1155;
+        } else {
+            revert("Unsupported smart contract");
+        }
+        bytes32 salt = keccak256(abi.encodePacked(_tokenAddress, _tokenId, block.chainid));
+        market = Clones.cloneDeterministic(marketImplementation, salt);
+        IMarket(market).initialize(_tokenAddress, _tokenId, address(this), nftType);
 
         // register token
-        markets[_NFTContract][_tokenId] = market;
+        markets[_tokenAddress][_tokenId] = market;
         tokenData[market] = data;
 
-        emit MarketCreated(market, _NFTContract, _tokenId);
+        emit MarketCreated(market, _tokenAddress, _tokenId);
     }
 
     // TODO comment and test

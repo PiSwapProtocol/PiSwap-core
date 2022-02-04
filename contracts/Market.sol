@@ -2,9 +2,10 @@
 pragma solidity 0.8.11;
 
 import "./Types.sol";
-import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
-import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC721/utils/ERC721HolderUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC1155/utils/ERC1155HolderUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 interface IERC721_ {
     function safeTransferFrom(
@@ -44,12 +45,12 @@ interface ITokenRegistry {
     function priceImpact() external view returns (uint256);
 }
 
-contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtector {
+contract Market is Initializable, ERC1155HolderUpgradeable, ERC721HolderUpgradeable, ReentrancyGuardUpgradeable {
     ITokenRegistry public registry;
     address public NFTtokenAddress;
     uint256 public NFTtokenId;
-    uint256 public ethReserve;
     NFTType public nftType;
+    uint256 public ethReserve;
 
     uint256 public depositedEth = 0;
 
@@ -69,17 +70,22 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         _;
     }
 
-    constructor(
+    function initialize(
         address _tokenAddress,
         uint256 _tokenId,
         address _registry,
         NFTType _nftType
-    ) {
+    ) public initializer {
+        __ERC1155Holder_init();
+        __ERC721Holder_init();
+        __ReentrancyGuard_init();
         registry = ITokenRegistry(_registry);
         NFTtokenAddress = _tokenAddress;
         NFTtokenId = _tokenId;
         nftType = _nftType;
     }
+
+    // TODO add return values to purchase and redeem functions
 
     /// @notice purchase tokens from the contract
     /// @dev              in case the market is at a loss / profit, it is evened out using the marketProfit function
@@ -114,12 +120,13 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         uint256 _amount,
         uint256 _minEth,
         uint256 _deadline
-    ) public ensure(_deadline) nonReentrant FLprotected {
+    ) public ensure(_deadline) nonReentrant {
         uint256 depositedEthAfterSell = inverseTokenFormula(
             registry.getTotalSupply(address(this), TokenType.BULL) - _amount
         );
         uint256 amountEth = depositedEth - depositedEthAfterSell;
         amountEth = (amountEth * marketProfit()) / 1 ether;
+        uint256 fee = (amountEth * 3) / 1000;
         depositedEth = depositedEthAfterSell;
         // if transfer to owner unsuccessful, don't collect fee
         (bool success, ) = registry.owner().call{value: fee}("");

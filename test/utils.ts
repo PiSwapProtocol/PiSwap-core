@@ -22,17 +22,14 @@ export const setup = async (
   return [registry, market, token];
 };
 
-export const deployTokenRegistry = async (
-  ownerAddress?: string,
-  marketFactoryAddress?: string
-): Promise<TokenRegistry> => {
+export const deployTokenRegistry = async (ownerAddress?: string, implementation?: string): Promise<TokenRegistry> => {
   if (!ownerAddress) {
     ownerAddress = (await deployProxy()).address;
   }
-  if (!marketFactoryAddress) {
-    marketFactoryAddress = (await (await ethers.getContractFactory('MarketFactory')).deploy()).address;
+  if (!implementation) {
+    implementation = (await (await ethers.getContractFactory('Market')).deploy()).address;
   }
-  return (await ethers.getContractFactory('TokenRegistry')).deploy(ownerAddress, marketFactoryAddress, '');
+  return (await ethers.getContractFactory('TokenRegistry')).deploy(ownerAddress, implementation, '');
 };
 
 export const deployProxy = async (marketAddress?: string): Promise<Proxy> => {

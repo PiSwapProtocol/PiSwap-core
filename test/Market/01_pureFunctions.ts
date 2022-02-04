@@ -13,7 +13,7 @@ describe('Market', async () => {
     let market: Market;
     before(async () => {
       const factory = await ethers.getContractFactory('Market');
-      market = await factory.deploy(accounts[0].address, 0, accounts[7].address, 0);
+      market = await factory.deploy();
     });
 
     it('max supply should be 1,000,000 tokens', async () => {
