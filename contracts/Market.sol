@@ -29,7 +29,7 @@ interface IERC1155_ {
 interface ITokenRegistry {
     function owner() external view returns (address);
 
-    function getTotalSupply(address _market, TokenType _tokenType) external view returns (uint256);
+    function totalSupply(uint256 id) external view returns (uint256);
 
     // prettier-ignore
     function mint(address _to, uint256 _amount, TokenType _tokenType) external;
@@ -102,7 +102,8 @@ contract Market is Initializable, ERC1155HolderUpgradeable, ERC721HolderUpgradea
         amountEth = (amountEth * 1 ether) / _marketProfit(address(this).balance - amountEth);
         uint256 supplyAfterPurchase = tokenFormula(depositedEth + amountEth);
         // Bull and bear tokens always have the same total supply
-        uint256 currentSupply = registry.getTotalSupply(address(this), TokenType.BULL);
+        uint256 id = getTokenId(TokenType.BULL);
+        uint256 currentSupply = registry.totalSupply(id);
         uint256 purchasedTokenAmount = supplyAfterPurchase - currentSupply;
         require(purchasedTokenAmount >= _minTokens, "Minimum amount not reached");
         depositedEth += amountEth;
@@ -121,9 +122,8 @@ contract Market is Initializable, ERC1155HolderUpgradeable, ERC721HolderUpgradea
         uint256 _minEth,
         uint256 _deadline
     ) public ensure(_deadline) nonReentrant {
-        uint256 depositedEthAfterSell = inverseTokenFormula(
-            registry.getTotalSupply(address(this), TokenType.BULL) - _amount
-        );
+        uint256 id = getTokenId(TokenType.BULL);
+        uint256 depositedEthAfterSell = inverseTokenFormula(registry.totalSupply(id) - _amount);
         uint256 amountEth = depositedEth - depositedEthAfterSell;
         amountEth = (amountEth * marketProfit()) / 1 ether;
         uint256 fee = (amountEth * 3) / 1000;
@@ -154,7 +154,7 @@ contract Market is Initializable, ERC1155HolderUpgradeable, ERC721HolderUpgradea
     ) public payable ensure(_deadline) nonReentrant returns (uint256) {
         uint256 bullId = getTokenId(TokenType.BULL);
         uint256 bearId = getTokenId(TokenType.BEAR);
-        uint256 liquiditySupply = registry.getTotalSupply(address(this), TokenType.LIQUIDITY);
+        uint256 liquiditySupply = registry.totalSupply(getTokenId(TokenType.LIQUIDITY));
         if (liquiditySupply > 0) {
             uint256 bullReserve = registry.balanceOf(address(this), bullId);
             uint256 bearReserve = registry.balanceOf(address(this), bearId);
@@ -213,7 +213,7 @@ contract Market is Initializable, ERC1155HolderUpgradeable, ERC721HolderUpgradea
     {
         // cannot use modifier here, stack too deep
         require(block.timestamp < _deadline, "expired");
-        uint256 liquiditySupply = registry.getTotalSupply(address(this), TokenType.LIQUIDITY);
+        uint256 liquiditySupply = registry.totalSupply(getTokenId(TokenType.LIQUIDITY));
         require(liquiditySupply > 0);
         (uint256 bullId, uint256 bearId, uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
 
@@ -501,7 +501,8 @@ contract Market is Initializable, ERC1155HolderUpgradeable, ERC721HolderUpgradea
     function tokenPricePurchase(uint256 _amount) public view returns (uint256) {
         _amount = (_amount * marketProfit()) / 1 ether;
         uint256 supplyAfterPurchase = tokenFormula(depositedEth + _amount);
-        uint256 currentSupply = registry.getTotalSupply(address(this), TokenType.BULL);
+        uint256 id = getTokenId(TokenType.BULL);
+        uint256 currentSupply = registry.totalSupply(id);
         return supplyAfterPurchase - currentSupply;
     }
 
@@ -519,9 +520,8 @@ contract Market is Initializable, ERC1155HolderUpgradeable, ERC721HolderUpgradea
     /// @param _amount    amount of tokens in
     /// @return           amount of ETH out
     function tokenPriceRedemption(uint256 _amount) public view returns (uint256) {
-        uint256 depositedEthAfterSell = inverseTokenFormula(
-            registry.getTotalSupply(address(this), TokenType.BULL) - _amount
-        );
+        uint256 id = getTokenId(TokenType.BULL);
+        uint256 depositedEthAfterSell = inverseTokenFormula(registry.totalSupply(id) - _amount);
         uint256 amountEth = depositedEth - depositedEthAfterSell;
         return (amountEth * marketProfit()) / 1 ether;
     }

@@ -2,7 +2,7 @@
 pragma solidity 0.8.11;
 
 import "./Types.sol";
-import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
+import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
 
 interface IMarket {
@@ -19,7 +19,7 @@ interface IMarket {
 /// @title  Token Registry
 /// @notice Implements the ERC1155 token standard and deploys new markets
 /// @dev    Due to the contract size limitations, a separate contract deploys the market contracts
-contract TokenRegistry is ERC1155 {
+contract TokenRegistry is ERC1155Supply {
     struct TokenData {
         address NFTContract;
         uint256 tokenId;
@@ -31,8 +31,7 @@ contract TokenRegistry is ERC1155 {
     mapping(address => TokenData) public tokenData;
     // nft contract address => token id => market address
     mapping(address => mapping(uint256 => address)) public markets;
-    // token id => total supply
-    mapping(uint256 => uint256) public totalSupply;
+
     uint8 public constant decimals = 18;
     uint256 public priceImpact = 10 ether;
     address private _proposedOwner;
@@ -106,15 +105,6 @@ contract TokenRegistry is ERC1155 {
         priceImpact = _newImpact;
     }
 
-    /// @notice Returns the total supply for a specific token
-    /// @param _market    market smart contract address
-    /// @param _tokenType type of the token
-    /// @return           total supply of the token
-    function getTotalSupply(address _market, TokenType _tokenType) public view returns (uint256) {
-        uint256 tokenId = getTokenId(_market, _tokenType);
-        return totalSupply[tokenId];
-    }
-
     /// @notice Calculates token id
     /// @param _market    market smart contract address
     /// @param _tokenType type of the token
@@ -135,7 +125,6 @@ contract TokenRegistry is ERC1155 {
         require(_amount > 0, "Amount can't be zero");
         uint256 tokenId = getTokenId(msg.sender, _tokenType);
         _mint(_to, tokenId, _amount, "");
-        totalSupply[tokenId] += _amount;
     }
 
     /// @notice Burn tokens from an address
@@ -151,6 +140,5 @@ contract TokenRegistry is ERC1155 {
         require(_amount > 0, "Amount can't be zero");
         uint256 tokenId = getTokenId(msg.sender, _tokenType);
         _burn(_from, tokenId, _amount);
-        totalSupply[tokenId] -= _amount;
     }
 }

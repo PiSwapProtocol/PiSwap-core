@@ -55,8 +55,10 @@ describe('Market', async () => {
       });
       await expect(market.redeemTokens('1', 0, c.unix2100, { from: accounts[2].address })).to.be.reverted;
       await market.redeemTokens(c.tokensFor1Eth, 0, c.unix2100);
-      expect(await registry.getTotalSupply(market.address, c.tokenType.BULL)).to.equal('0');
-      expect(await registry.getTotalSupply(market.address, c.tokenType.BEAR)).to.equal('0');
+      const bullId = await market.getTokenId(c.tokenType.BULL);
+      const bearId = await market.getTokenId(c.tokenType.BEAR);
+      expect(await registry.totalSupply(bullId)).to.equal('0');
+      expect(await registry.totalSupply(bearId)).to.equal('0');
     });
 
     it('should not be able to redeem 0 tokens', async () => {
