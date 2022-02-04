@@ -34,10 +34,8 @@ contract TokenRegistry is BeaconUpgradeable, ERC1155SupplyUpgradeable {
     mapping(address => mapping(uint256 => address)) public markets;
 
     uint8 public constant decimals = 18;
-    uint256 public priceImpact;
 
     event MarketCreated(address indexed market, address indexed NFTContract, uint256 indexed tokenId);
-    event PriceImpactChange(uint256 indexed oldPriceImpact, uint256 indexed newPriceImpact);
 
     modifier onlyMarket() {
         require(nftInfo[_msgSender()].tokenAddress != address(0), "Only callable by markets");
@@ -53,7 +51,6 @@ contract TokenRegistry is BeaconUpgradeable, ERC1155SupplyUpgradeable {
         __Beacon_init(_marketImplementation);
         __ERC1155_init(_uri);
         __ERC1155Supply_init();
-        priceImpact = 10 ether;
     }
 
     /// @notice Creates a new market for a specified NFT
@@ -82,12 +79,6 @@ contract TokenRegistry is BeaconUpgradeable, ERC1155SupplyUpgradeable {
         address market = markets[_tokenAddress][_tokenId];
         NFT memory data = nftInfo[market];
         return data.tokenAddress != address(0);
-    }
-
-    function setPriceImpact(uint256 _newImpact) public onlyOwner {
-        require(_newImpact > 2 ether);
-        emit PriceImpactChange(priceImpact, _newImpact);
-        priceImpact = _newImpact;
     }
 
     /// @notice Calculates token id
