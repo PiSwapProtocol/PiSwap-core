@@ -2,7 +2,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
 import { before } from 'mocha';
-import { Market, TokenRegistry } from '../../typechain-types';
+import { PiSwapMarket, PiSwapRegistry } from '../../typechain-types';
 import c from '../constants';
 import { deployProxy, setupWithERC721 } from '../utils';
 
@@ -13,8 +13,8 @@ describe('Market', async () => {
   });
 
   describe('Token purchase', async () => {
-    let registry: TokenRegistry;
-    let market: Market;
+    let registry: PiSwapRegistry;
+    let market: PiSwapMarket;
     let ownerAddress: string;
     before(async () => {
       ownerAddress = accounts[8].address;
@@ -51,8 +51,8 @@ describe('Market', async () => {
     });
   });
   describe('Token purchase without fees', () => {
-    let registry: TokenRegistry;
-    let market: Market;
+    let registry: PiSwapRegistry;
+    let market: PiSwapMarket;
     let ownerAddress: string;
     before(async () => {
       ownerAddress = (await deployProxy()).address;

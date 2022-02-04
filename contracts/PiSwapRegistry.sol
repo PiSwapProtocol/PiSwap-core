@@ -27,7 +27,7 @@ struct NFT {
 /// @title  Token Registry
 /// @notice Implements the ERC1155 token standard and deploys new markets
 /// @dev    Due to the contract size limitations, a separate contract deploys the market contracts
-contract TokenRegistry is BeaconUpgradeable, ERC1155SupplyUpgradeable {
+contract PiSwapRegistry is BeaconUpgradeable, ERC1155SupplyUpgradeable {
     // market address => token data
     mapping(address => NFT) public nftInfo;
     // nft contract address => token id => market address

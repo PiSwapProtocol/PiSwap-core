@@ -1,18 +1,13 @@
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { Market } from '../../typechain-types';
+import { PiSwapMarket } from '../../typechain-types';
 import c from '../constants';
 
 describe('Market', async () => {
-  let accounts: SignerWithAddress[];
-  before(async () => {
-    accounts = await ethers.getSigners();
-  });
   describe('Pure functions', async () => {
-    let market: Market;
+    let market: PiSwapMarket;
     before(async () => {
-      const factory = await ethers.getContractFactory('Market');
+      const factory = await ethers.getContractFactory('PiSwapMarket');
       market = await factory.deploy();
     });
 

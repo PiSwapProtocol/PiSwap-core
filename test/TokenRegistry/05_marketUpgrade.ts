@@ -1,17 +1,17 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers, upgrades } from 'hardhat';
-import { ERC721, IUpgradeTest, IUpgradeTest__factory, TokenRegistry } from '../../typechain-types';
+import { IUpgradeTest, PiSwapRegistry } from '../../typechain-types';
 import { deployERC721 } from '../utils';
 
-describe('TokenRegistry', async () => {
+describe('Registry', async () => {
   let accounts: SignerWithAddress[];
   before(async () => {
     accounts = await ethers.getSigners();
   });
 
   describe('Upgrading markets', async () => {
-    let registry: TokenRegistry;
+    let registry: PiSwapRegistry;
     let market1: IUpgradeTest;
     let market2: IUpgradeTest;
 
@@ -20,8 +20,8 @@ describe('TokenRegistry', async () => {
       const token2 = await deployERC721();
       const mockMarket = (await (await ethers.getContractFactory('UpgradeTestA')).deploy()) as IUpgradeTest;
 
-      const factory = await ethers.getContractFactory('TokenRegistry');
-      registry = (await upgrades.deployProxy(factory, [accounts[0].address, mockMarket.address, ''])) as TokenRegistry;
+      const factory = await ethers.getContractFactory('PiSwapRegistry');
+      registry = (await upgrades.deployProxy(factory, [accounts[0].address, mockMarket.address, ''])) as PiSwapRegistry;
       await registry.createMarket(token1.address, '0');
       market1 = await (
         await ethers.getContractFactory('UpgradeTestA')

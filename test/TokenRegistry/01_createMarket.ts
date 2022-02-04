@@ -1,7 +1,8 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { ERC721, Market, TokenRegistry, TokenRegistry__factory } from '../../typechain-types';
+import { ERC721, PiSwapMarket, PiSwapRegistry, PiSwapRegistry__factory } from '../../typechain-types';
+import c from '../constants';
 import {
   deployERC165,
   deployERC721,
@@ -11,17 +12,16 @@ import {
   getMarketByAddress,
   setupWithERC1155,
 } from '../utils';
-import c from '../constants';
 
-describe('TokenRegistry', async () => {
+describe('Registry', async () => {
   let accounts: SignerWithAddress[];
   before(async () => {
     accounts = await ethers.getSigners();
   });
 
   describe('Creating markets', async () => {
-    let registry: TokenRegistry;
-    let market: Market;
+    let registry: PiSwapRegistry;
+    let market: PiSwapMarket;
     let ownerAddress: string;
     let token: ERC721;
 
@@ -44,7 +44,7 @@ describe('TokenRegistry', async () => {
     });
 
     it('deployed market contract should get owner address from factory', async () => {
-      const registry = await TokenRegistry__factory.connect(await market.registry(), ethers.provider);
+      const registry = await PiSwapRegistry__factory.connect(await market.registry(), ethers.provider);
       expect(await registry.owner()).to.equal(ownerAddress);
     });
 

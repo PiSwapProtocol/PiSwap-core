@@ -41,11 +41,9 @@ interface ITokenRegistry {
 
     // prettier-ignore
     function safeTransferFrom(address from, address to, uint256 id, uint256 amount, bytes memory data) external;
-
-    function priceImpact() external view returns (uint256);
 }
 
-contract Market is Initializable, ERC1155HolderUpgradeable, ERC721HolderUpgradeable, ReentrancyGuardUpgradeable {
+contract PiSwapMarket is Initializable, ERC1155HolderUpgradeable, ERC721HolderUpgradeable, ReentrancyGuardUpgradeable {
     ITokenRegistry public registry;
     address public NFTtokenAddress;
     uint256 public NFTtokenId;
@@ -397,7 +395,7 @@ contract Market is Initializable, ERC1155HolderUpgradeable, ERC721HolderUpgradea
     ) private view returns (bool) {
         if (ethReserve > 0 && _bullReserve > 0 && _bearReserve > 0) {
             uint256 nftValue = (_bearReserve * 1 ether) / _bullReserve;
-            uint256 priceImpact = registry.priceImpact();
+            uint256 priceImpact = 10 ether;
             uint256 liquidityPool = address(this).balance - ethReserve;
             uint256 minLiquidity = (nftValue * priceImpact) / 1 ether;
             if (liquidityPool >= minLiquidity) {
@@ -539,4 +537,6 @@ contract Market is Initializable, ERC1155HolderUpgradeable, ERC721HolderUpgradea
         }
         return ((contractBalance - ethReserve) * 1 ether) / (depositedEth);
     }
+
+    uint256[50] private __gap;
 }

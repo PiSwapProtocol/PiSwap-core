@@ -2,7 +2,7 @@ import { BigNumber } from '@ethersproject/bignumber';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { Market, TokenRegistry } from '../../typechain-types';
+import { PiSwapMarket, PiSwapRegistry } from '../../typechain-types';
 import c from '../constants';
 import { setupWithERC721 } from '../utils';
 
@@ -13,8 +13,8 @@ describe('Market', async () => {
   });
 
   describe('Adding liquidity', async () => {
-    let registry: TokenRegistry;
-    let market: Market;
+    let registry: PiSwapRegistry;
+    let market: PiSwapMarket;
     let bullTokenId: BigNumber;
     let bearTokenId: BigNumber;
     let LiquidityTokenId: BigNumber;

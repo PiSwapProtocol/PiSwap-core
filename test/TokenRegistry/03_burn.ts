@@ -1,18 +1,18 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { TokenRegistry } from '../../typechain-types';
+import { PiSwapRegistry } from '../../typechain-types';
 import c from '../constants';
 import { deployTokenRegistry } from '../utils';
 
-describe('TokenRegistry', async () => {
+describe('Registry', async () => {
   let accounts: SignerWithAddress[];
   before(async () => {
     accounts = await ethers.getSigners();
   });
 
   describe('burning', async () => {
-    let registry: TokenRegistry;
+    let registry: PiSwapRegistry;
     before(async () => {
       registry = await deployTokenRegistry(accounts[0].address);
     });

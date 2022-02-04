@@ -2,7 +2,7 @@ import { BigNumber } from '@ethersproject/bignumber';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { Market, ProxyTest, TokenRegistry } from '../../typechain-types';
+import { PiSwapMarket, PiSwapRegistry, ProxyTest } from '../../typechain-types';
 import c from '../constants';
 import { deployProxy, setupWithERC721 } from '../utils';
 
@@ -13,8 +13,8 @@ describe('Market', async () => {
   });
 
   describe('Removing liquidity', async () => {
-    let registry: TokenRegistry;
-    let market: Market;
+    let registry: PiSwapRegistry;
+    let market: PiSwapMarket;
     let bullTokenId: BigNumber;
     let bearTokenId: BigNumber;
     let LiquidityTokenId: BigNumber;

@@ -1,7 +1,7 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { ERC1155, ERC721, Market, TokenRegistry } from '../../typechain-types';
+import { ERC1155, ERC721, PiSwapMarket, PiSwapRegistry } from '../../typechain-types';
 import c from '../constants';
 import { setupWithERC1155, setupWithERC721 } from '../utils';
 
@@ -12,8 +12,8 @@ describe('Market', async () => {
   });
 
   describe('NFT sell: ERC721', async () => {
-    let registry: TokenRegistry;
-    let market: Market;
+    let registry: PiSwapRegistry;
+    let market: PiSwapMarket;
     let token: ERC721;
 
     before(async () => {
@@ -58,8 +58,8 @@ describe('Market', async () => {
   });
 
   describe('NFT sell: ERC1155', async () => {
-    let registry: TokenRegistry;
-    let market: Market;
+    let registry: PiSwapRegistry;
+    let market: PiSwapMarket;
     let token: ERC1155;
 
     before(async () => {

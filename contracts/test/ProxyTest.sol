@@ -2,14 +2,14 @@
 pragma solidity 0.8.11;
 
 import "../Types.sol";
-import "../Market.sol";
+import "../PiSwapMarket.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 
 contract ProxyTest is ERC1155Holder {
-    Market m;
+    PiSwapMarket m;
 
     constructor(address _market) {
-        m = Market(_market);
+        m = PiSwapMarket(_market);
     }
 
     receive() external payable {

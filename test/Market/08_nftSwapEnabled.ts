@@ -1,7 +1,7 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { Market, TokenRegistry } from '../../typechain-types';
+import { PiSwapMarket, PiSwapRegistry } from '../../typechain-types';
 import c from '../constants';
 import { deployProxy, setupWithERC721 } from '../utils';
 
@@ -12,8 +12,8 @@ describe('Market', async () => {
   });
 
   describe('NFT swap enabled check', async () => {
-    let registry: TokenRegistry;
-    let market: Market;
+    let registry: PiSwapRegistry;
+    let market: PiSwapMarket;
 
     before(async () => {
       [registry, market] = await setupWithERC721();

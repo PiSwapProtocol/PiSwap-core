@@ -50,7 +50,7 @@ const config: HardhatUserConfig = {
     currency: 'USD',
     gasPrice: 100,
     enabled: process.env.REPORT_GAS === 'true',
-    excludeContracts: ['Proxy', 'SampleERC165', 'SampleERC721', 'SampleERC1155'],
+    excludeContracts: ['ProxyTest', 'SampleERC165', 'SampleERC721', 'SampleERC1155', 'UpgradeTestA', 'UpgradeTestB'],
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_TOKEN,
