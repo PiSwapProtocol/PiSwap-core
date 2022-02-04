@@ -1,9 +1,9 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { ERC1155, ERC721, FlashloanAttackA, Market, TokenRegistry } from '../../typechain-types';
+import { ERC1155, ERC721, Market, TokenRegistry } from '../../typechain-types';
 import c from '../constants';
-import { deployFlashloan, deployProxy, setupWithERC1155, setupWithERC721 } from '../utils';
+import { setupWithERC1155, setupWithERC721 } from '../utils';
 
 describe('Market', async () => {
   let accounts: SignerWithAddress[];
@@ -108,31 +108,6 @@ describe('Market', async () => {
       expect(await token.balanceOf(accounts[0].address, 0)).to.equal(2);
       const newTokenBalance = await ethers.provider.getBalance(market.address);
       expect(newTokenBalance).to.equal(tokenBalance.add(ethers.utils.parseEther('0.4')));
-    });
-  });
-  describe('Flashloan protection', async () => {
-    let token: ERC721;
-    let registry: TokenRegistry;
-    let market: Market;
-    let flashloan: FlashloanAttackA;
-
-    before(async () => {
-      [registry, market, token] = await setupWithERC721();
-      flashloan = await deployFlashloan(registry.address, market.address, ethers.utils.parseEther('4'));
-      await flashloan.setUp1();
-      await flashloan.setUp2();
-      await token.transferFrom(accounts[0].address, flashloan.address, 0);
-      await flashloan.sellNFTsuccess();
-    });
-
-    it('should not be able buy NFT if another function was called in the same block by the same address', async () => {
-      await expect(flashloan.buyNFT()).to.be.revertedWith(c.errorMessages.flashloanProtection);
-    });
-    it('should not be able buy NFT if another function was called in the same block originating from the same address', async () => {
-      await expect(flashloan.buyNFT_B()).to.be.revertedWith(c.errorMessages.flashloanProtection);
-    });
-    it('should not fail', async () => {
-      await flashloan.buyNFTsuccess();
     });
   });
 });

@@ -2,7 +2,6 @@
 pragma solidity 0.8.4;
 
 import "./Types.sol";
-import "./FlashLoanProtector.sol";
 import "@openzeppelin/contracts/token/ERC721/utils/ERC721Holder.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
@@ -86,13 +85,7 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
     /// @dev              in case the market is at a loss / profit, it is evened out using the marketProfit function
     /// @param _minTokens minimum desired amount to receive after purchase (amount x provided means x bull tokens and x bear tokens)
     /// @param _deadline  time after which the transaction should not be executed anymore
-    function purchaseTokens(uint256 _minTokens, uint256 _deadline)
-        public
-        payable
-        ensure(_deadline)
-        nonReentrant
-        FLprotected
-    {
+    function purchaseTokens(uint256 _minTokens, uint256 _deadline) public payable ensure(_deadline) nonReentrant {
         uint256 amountEth = msg.value;
         uint256 fee = (amountEth * 3) / 1000;
         // if transfer to owner token unsuccessful, don't collect fee
@@ -122,10 +115,10 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         uint256 _minEth,
         uint256 _deadline
     ) public ensure(_deadline) nonReentrant FLprotected {
-        uint256 depositedEthAfterSell =
-            inverseTokenFormula(registry.getTotalSupply(address(this), TokenType.BULL) - _amount);
+        uint256 depositedEthAfterSell = inverseTokenFormula(
+            registry.getTotalSupply(address(this), TokenType.BULL) - _amount
+        );
         uint256 amountEth = depositedEth - depositedEthAfterSell;
-        uint256 fee = (amountEth * 3) / 1000;
         amountEth = (amountEth * marketProfit()) / 1 ether;
         depositedEth = depositedEthAfterSell;
         // if transfer to owner unsuccessful, don't collect fee
@@ -151,7 +144,7 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         uint256 _maxBullTokens,
         uint256 _maxBearTokens,
         uint256 _deadline
-    ) public payable ensure(_deadline) nonReentrant FLprotected returns (uint256) {
+    ) public payable ensure(_deadline) nonReentrant returns (uint256) {
         uint256 bullId = getTokenId(TokenType.BULL);
         uint256 bearId = getTokenId(TokenType.BEAR);
         uint256 liquiditySupply = registry.getTotalSupply(address(this), TokenType.LIQUIDITY);
@@ -205,7 +198,6 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
     )
         public
         nonReentrant
-        FLprotected
         returns (
             uint256 amountEth,
             uint256 amountBull,
@@ -240,15 +232,15 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         TokenType _tokenType,
         uint256 _minTokens,
         uint256 _deadline
-    ) public payable ensure(_deadline) nonReentrant FLprotected returns (uint256 tokensOut) {
+    ) public payable ensure(_deadline) nonReentrant returns (uint256 tokensOut) {
         require(msg.value > 0);
         require(_tokenType != TokenType.LIQUIDITY, "Cannot swap liquidity token");
 
         (uint256 bullId, uint256 bearId, uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
         require(ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
 
-        uint256 tokenEthReserve =
-            (ethReserve * (_tokenType == TokenType.BULL ? bearReserve : bullReserve)) / (bullReserve + bearReserve);
+        uint256 tokenEthReserve = (ethReserve * (_tokenType == TokenType.BULL ? bearReserve : bullReserve)) /
+            (bullReserve + bearReserve);
         tokensOut = _getPrice(msg.value, tokenEthReserve, _tokenType == TokenType.BULL ? bullReserve : bearReserve);
         require(tokensOut >= _minTokens, "Slippage");
 
@@ -274,15 +266,15 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         uint256 _amount,
         uint256 _minEth,
         uint256 _deadline
-    ) public ensure(_deadline) nonReentrant FLprotected returns (uint256 ethOut) {
+    ) public ensure(_deadline) nonReentrant returns (uint256 ethOut) {
         require(_amount > 0);
         require(_tokenType != TokenType.LIQUIDITY, "Cannot swap liquidity token");
 
         (uint256 bullId, uint256 bearId, uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
         require(ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
 
-        uint256 tokenEthReserve =
-            (ethReserve * (_tokenType == TokenType.BULL ? bearReserve : bullReserve)) / (bullReserve + bearReserve);
+        uint256 tokenEthReserve = (ethReserve * (_tokenType == TokenType.BULL ? bearReserve : bullReserve)) /
+            (bullReserve + bearReserve);
         ethOut = _getPrice(_amount, _tokenType == TokenType.BULL ? bullReserve : bearReserve, tokenEthReserve);
         require(ethOut >= _minEth, "Slippage");
 
@@ -302,7 +294,7 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
     /// @dev    if contract holds NFT, it should be purchasable at all times
     /// @param _deadline time after which the transaction should not be executed anymore
     /// @param _amount   amount of NFT Tokens to swap (ERC1155 only)
-    function buyNFT(uint256 _deadline, uint256 _amount) public payable ensure(_deadline) nonReentrant FLprotected {
+    function buyNFT(uint256 _deadline, uint256 _amount) public payable ensure(_deadline) nonReentrant {
         uint256 nftValue = NFTValue();
         if (nftType == NFTType.ERC721) {
             require(msg.value >= nftValue, "Slippage");
@@ -328,7 +320,7 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         uint256 _minEth,
         uint256 _deadline,
         uint256 _amount
-    ) public ensure(_deadline) nonReentrant FLprotected {
+    ) public ensure(_deadline) nonReentrant {
         (, , uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
         require(ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
         uint256 nftValue = _NFTValue(bullReserve, bearReserve);
@@ -431,6 +423,22 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         bearReserve = registry.balanceOf(address(this), bearId);
     }
 
+    function getReserves()
+        public
+        view
+        returns (
+            uint256 eth,
+            uint256 bull,
+            uint256 bear
+        )
+    {
+        uint256 bullId = getTokenId(TokenType.BULL);
+        uint256 bearId = getTokenId(TokenType.BEAR);
+        eth = ethReserve;
+        bull = registry.balanceOf(address(this), bullId);
+        bear = registry.balanceOf(address(this), bearId);
+    }
+
     /// @notice calculates the output amount based on input amount and reserves
     /// @param _amount        amount of input token
     /// @param _inputReserve  reserve size of the input token
@@ -471,6 +479,14 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
 
     // TODO test
 
+    /// @notice returns current token purchase price with fee
+    /// @param _amount    amount of ETH in
+    /// @return           amount of tokens out
+    function tokenPricePurchaseWithFee(uint256 _amount) public view returns (uint256) {
+        uint256 fee = (_amount * 3) / 1000;
+        return tokenPricePurchase(_amount - fee);
+    }
+
     /// @notice returns current token purchase price
     /// @dev              does not take fee into consideration
     /// @param _amount    amount of ETH in
@@ -482,13 +498,23 @@ contract Market is ERC1155Holder, ERC721Holder, ReentrancyGuard, FlashLoanProtec
         return supplyAfterPurchase - currentSupply;
     }
 
+    /// @notice returns current token redemption price with fee
+    /// @param _amount    amount of tokens in
+    /// @return           amount of ETH out
+    function tokenPriceRedemptionWithFee(uint256 _amount) public view returns (uint256) {
+        uint256 amountEth = tokenPriceRedemption(_amount);
+        uint256 fee = (amountEth * 3) / 1000;
+        return amountEth - fee;
+    }
+
     /// @notice returns current token redemption price
     /// @dev              does not take fee into consideration
     /// @param _amount    amount of tokens in
     /// @return           amount of ETH out
     function tokenPriceRedemption(uint256 _amount) public view returns (uint256) {
-        uint256 depositedEthAfterSell =
-            inverseTokenFormula(registry.getTotalSupply(address(this), TokenType.BULL) - _amount);
+        uint256 depositedEthAfterSell = inverseTokenFormula(
+            registry.getTotalSupply(address(this), TokenType.BULL) - _amount
+        );
         uint256 amountEth = depositedEth - depositedEthAfterSell;
         return (amountEth * marketProfit()) / 1 ether;
     }

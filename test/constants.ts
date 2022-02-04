@@ -19,7 +19,6 @@ export default {
     insufficientAmount: 'Insufficient amount',
     insufficientLiquidity: 'Insufficient liquidity',
     swappingNotEnabled: 'NFT swapping not enabled',
-    flashloanProtection: 'Flash loan protection',
     burnInsufficientBalance: 'ERC1155: burn amount exceeds balance',
   },
   tokenType: {

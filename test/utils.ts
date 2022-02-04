@@ -1,16 +1,6 @@
-import { BigNumber } from '@ethersproject/bignumber';
 import { ContractTransaction } from '@ethersproject/contracts';
 import { ethers } from 'hardhat';
-import {
-  ERC1155,
-  ERC165,
-  ERC721,
-  FlashloanAttackA,
-  Market,
-  Market__factory,
-  Proxy,
-  TokenRegistry,
-} from '../typechain-types';
+import { ERC1155, ERC165, ERC721, Market, Market__factory, Proxy, TokenRegistry } from '../typechain-types';
 
 export const setupWithERC721 = async (ownerAddress?: string): Promise<[TokenRegistry, Market, ERC721]> => {
   const token = await deployERC721();
@@ -68,12 +58,4 @@ export const getMarketByAddress = async (address: string): Promise<Market> => {
 export const getMarketAddressFromEvent = async (tx: Promise<ContractTransaction>): Promise<string> => {
   const receipt = await (await tx).wait();
   return receipt.events![0].args!.market;
-};
-
-export const deployFlashloan = async (
-  registry: string,
-  market: string,
-  value: BigNumber
-): Promise<FlashloanAttackA> => {
-  return (await ethers.getContractFactory('FlashloanAttackA')).deploy(registry, market, { value });
 };
