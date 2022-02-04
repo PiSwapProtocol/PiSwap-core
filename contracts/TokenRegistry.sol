@@ -2,7 +2,7 @@
 pragma solidity 0.8.11;
 
 import "./Types.sol";
-import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Supply.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155SupplyUpgradeable.sol";
 import "@openzeppelin/contracts/proxy/Clones.sol";
 
 interface IMarket {
@@ -24,14 +24,14 @@ struct NFT {
 /// @title  Token Registry
 /// @notice Implements the ERC1155 token standard and deploys new markets
 /// @dev    Due to the contract size limitations, a separate contract deploys the market contracts
-contract TokenRegistry is ERC1155Supply {
+contract TokenRegistry is ERC1155SupplyUpgradeable {
     address public owner;
     address public marketImplementation;
     // market address => token data
     mapping(address => NFT) public nftInfo;
 
     uint8 public constant decimals = 18;
-    uint256 public priceImpact = 10 ether;
+    uint256 public priceImpact;
     address private _proposedOwner;
 
     event MarketCreated(address indexed market, address indexed NFTContract, uint256 indexed tokenId);
@@ -48,13 +48,16 @@ contract TokenRegistry is ERC1155Supply {
         _;
     }
 
-    constructor(
+    function initialize(
         address _owner,
         address _marketImplementation,
         string memory _uri
-    ) ERC1155(_uri) {
+    ) external initializer {
+        __ERC1155_init(_uri);
+        __ERC1155Supply_init();
         owner = _owner;
         marketImplementation = _marketImplementation;
+        priceImpact = 10 ether;
     }
 
     /// @notice Creates a new market for a specified NFT
@@ -144,7 +147,7 @@ contract TokenRegistry is ERC1155Supply {
     }
 
     function _getNFTType(address _tokenAddress) private view returns (NFTType) {
-        IERC165 token = IERC165(_tokenAddress);
+        IERC165Upgradeable token = IERC165Upgradeable(_tokenAddress);
         if (token.supportsInterface(0x80ac58cd)) {
             return NFTType.ERC721;
         } else if (token.supportsInterface(0xd9b67a26)) {
