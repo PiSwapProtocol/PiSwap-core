@@ -35,12 +35,14 @@ describe('TokenRegistry', async () => {
       const tokenAddress = token.address;
       const tokenId = ethers.BigNumber.from(0);
       const tx = registry.createMarket(tokenAddress, tokenId);
+      const marketAddress = await registry.getMarketAddress(tokenAddress, tokenId);
       market = await getMarketByAddress(await getMarketAddressFromEvent(tx));
       await expect(tx).to.emit(registry, 'MarketCreated').withArgs(market.address, tokenAddress, tokenId);
-      expect(await registry.markets(tokenAddress, 0)).to.equal(market.address);
-      const nft = await registry.tokenData(market.address);
-      expect(nft.NFTContract).to.equal(tokenAddress); // deep
-      expect(nft.tokenId).to.equal(tokenId); // deep
+      expect(await registry.marketExists(tokenAddress, tokenId)).to.be.true;
+      expect(marketAddress).to.equal(market.address);
+      const nft = await registry.nftInfo(market.address);
+      expect(nft.tokenAddress).to.equal(tokenAddress);
+      expect(nft.tokenId).to.equal(tokenId);
     });
 
     it('deployed market contract should get owner address from factory', async () => {

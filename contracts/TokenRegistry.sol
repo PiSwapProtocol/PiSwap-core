@@ -14,23 +14,21 @@ interface IMarket {
     ) external;
 }
 
+struct NFT {
+    address tokenAddress;
+    uint256 tokenId;
+}
+
 // TODO implement beneficiary
 
 /// @title  Token Registry
 /// @notice Implements the ERC1155 token standard and deploys new markets
 /// @dev    Due to the contract size limitations, a separate contract deploys the market contracts
 contract TokenRegistry is ERC1155Supply {
-    struct TokenData {
-        address NFTContract;
-        uint256 tokenId;
-    }
-
     address public owner;
     address public marketImplementation;
     // market address => token data
-    mapping(address => TokenData) public tokenData;
-    // nft contract address => token id => market address
-    mapping(address => mapping(uint256 => address)) public markets;
+    mapping(address => NFT) public nftInfo;
 
     uint8 public constant decimals = 18;
     uint256 public priceImpact = 10 ether;
@@ -41,7 +39,7 @@ contract TokenRegistry is ERC1155Supply {
     event PriceImpactChange(uint256 indexed oldPriceImpact, uint256 indexed newPriceImpact);
 
     modifier onlyMarket() {
-        require(tokenData[msg.sender].NFTContract != address(0), "Only callable by markets");
+        require(nftInfo[msg.sender].tokenAddress != address(0), "Only callable by markets");
         _;
     }
 
@@ -64,28 +62,31 @@ contract TokenRegistry is ERC1155Supply {
     /// @param _tokenId          Id of the NFT
     /// @return market           the address of the deployed market contract
     function createMarket(address _tokenAddress, uint256 _tokenId) external returns (address market) {
-        require(markets[_tokenAddress][_tokenId] == address(0), "Market already exists");
+        require(!marketExists(_tokenAddress, _tokenId), "Market already exists");
         require(_tokenAddress != address(this), "Cannot create market for this contract");
-        TokenData memory data = TokenData({NFTContract: _tokenAddress, tokenId: _tokenId});
+        NFT memory data = NFT({tokenAddress: _tokenAddress, tokenId: _tokenId});
+
         // deploy market contract
-        NFTType nftType;
-        IERC165 token = IERC165(_tokenAddress);
-        if (token.supportsInterface(0x80ac58cd)) {
-            nftType = NFTType.ERC721;
-        } else if (token.supportsInterface(0xd9b67a26)) {
-            nftType = NFTType.ERC1155;
-        } else {
-            revert("Unsupported smart contract");
-        }
+        NFTType nftType = _getNFTType(_tokenAddress);
         bytes32 salt = keccak256(abi.encodePacked(_tokenAddress, _tokenId, block.chainid));
         market = Clones.cloneDeterministic(marketImplementation, salt);
         IMarket(market).initialize(_tokenAddress, _tokenId, address(this), nftType);
 
         // register token
-        markets[_tokenAddress][_tokenId] = market;
-        tokenData[market] = data;
+        nftInfo[market] = data;
 
         emit MarketCreated(market, _tokenAddress, _tokenId);
+    }
+
+    function marketExists(address _tokenAddress, uint256 _tokenId) public view returns (bool) {
+        address market = getMarketAddress(_tokenAddress, _tokenId);
+        NFT memory data = nftInfo[market];
+        return data.tokenAddress != address(0);
+    }
+
+    function getMarketAddress(address _tokenAddress, uint256 _tokenId) public view returns (address) {
+        bytes32 salt = keccak256(abi.encodePacked(_tokenAddress, _tokenId, block.chainid));
+        return Clones.predictDeterministicAddress(marketImplementation, salt);
     }
 
     // TODO comment and test
@@ -140,5 +141,16 @@ contract TokenRegistry is ERC1155Supply {
         require(_amount > 0, "Amount can't be zero");
         uint256 tokenId = getTokenId(msg.sender, _tokenType);
         _burn(_from, tokenId, _amount);
+    }
+
+    function _getNFTType(address _tokenAddress) private view returns (NFTType) {
+        IERC165 token = IERC165(_tokenAddress);
+        if (token.supportsInterface(0x80ac58cd)) {
+            return NFTType.ERC721;
+        } else if (token.supportsInterface(0xd9b67a26)) {
+            return NFTType.ERC1155;
+        } else {
+            revert("Unsupported smart contract");
+        }
     }
 }
