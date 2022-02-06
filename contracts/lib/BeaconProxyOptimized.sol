@@ -10,37 +10,26 @@ struct AddressSlot {
 /// @notice based on OpenZeppelin Contracts v4.4.1 (proxy/beacon/BeaconProxy.sol)
 /// @dev removed all functions that are not used by BeaconProxy.sol to lower deployment gas costs
 /// @dev Beacon is set once upon initialization and cannot be changed afterwards
+/// @dev instread of using a storage slot, use an immutable variable
 contract BeaconProxyOptimized {
-    /**
-     * @dev The storage slot of the UpgradeableBeacon contract which defines the implementation for this proxy.
-     * This is bytes32(uint256(keccak256('eip1967.proxy.beacon')) - 1)) and is validated in the constructor.
-     */
-    bytes32 internal constant _BEACON_SLOT = 0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50;
+    address immutable beacon;
 
     /**
      * @dev Initializes the proxy with `beacon`.
      *
      * - `beacon` must be a contract with the interface {IBeacon}.
      */
-    constructor() payable {
-        assert(_BEACON_SLOT == bytes32(uint256(keccak256("eip1967.proxy.beacon")) - 1));
-        _setBeacon(msg.sender);
+    constructor() {
+        beacon = msg.sender;
+        require(isContract(beacon), "ERC1967: new beacon is not a contract");
+        require(isContract(IBeacon(beacon).implementation()), "ERC1967: beacon implementation is not a contract");
     }
 
     /**
      * @dev Returns the current implementation address of the associated beacon.
      */
     function _implementation() internal view virtual returns (address) {
-        return IBeacon(getBeaconSlot().value).implementation();
-    }
-
-    /**
-     * @dev Stores a new beacon in the EIP1967 beacon slot.
-     */
-    function _setBeacon(address newBeacon) private {
-        require(isContract(newBeacon), "ERC1967: new beacon is not a contract");
-        require(isContract(IBeacon(newBeacon).implementation()), "ERC1967: beacon implementation is not a contract");
-        getBeaconSlot().value = newBeacon;
+        return IBeacon(beacon).implementation();
     }
 
     /**
@@ -56,15 +45,6 @@ contract BeaconProxyOptimized {
             size := extcodesize(account)
         }
         return size > 0;
-    }
-
-    /**
-     * @dev Returns an `AddressSlot` with member `value` located at `_BEACON_SLOT`.
-     */
-    function getBeaconSlot() internal pure returns (AddressSlot storage r) {
-        assembly {
-            r.slot := _BEACON_SLOT
-        }
     }
 
     /**
