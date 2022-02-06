@@ -1,9 +1,9 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { PiSwapMarket, PiSwapRegistry } from '../../typechain-types';
+import { PiSwapMarket } from '../../typechain-types';
 import c from '../constants';
-import { deployProxy, setupWithERC721 } from '../utils';
+import { PiSwap } from '../utils';
 
 describe('Market', async () => {
   let accounts: SignerWithAddress[];
@@ -12,16 +12,17 @@ describe('Market', async () => {
   });
 
   describe('NFT swap enabled check', async () => {
-    let registry: PiSwapRegistry;
+    let p: PiSwap;
     let market: PiSwapMarket;
 
     before(async () => {
-      [registry, market] = await setupWithERC721();
-      await registry.connect(accounts[1]).setApprovalForAll(market.address, true);
+      p = await PiSwap.create();
+      market = await p.deplyoMarketERC721();
+      await p.registry.connect(accounts[1]).setApprovalForAll(market.address, true);
       await market.purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('2'),
       });
-      await registry.setApprovalForAll(market.address, true);
+      await p.registry.setApprovalForAll(market.address, true);
     });
 
     it('The NFT Value should be 1', async () => {

@@ -2,9 +2,9 @@ import { BigNumber } from '@ethersproject/bignumber';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { PiSwapMarket, PiSwapRegistry } from '../../typechain-types';
+import { PiSwapMarket } from '../../typechain-types';
 import c from '../constants';
-import { setupWithERC721 } from '../utils';
+import { PiSwap } from '../utils';
 
 describe('Market', async () => {
   let accounts: SignerWithAddress[];
@@ -13,16 +13,17 @@ describe('Market', async () => {
   });
 
   describe('Swap purchase tokens', async () => {
-    let registry: PiSwapRegistry;
+    let p: PiSwap;
     let market: PiSwapMarket;
     let bullTokenId: BigNumber;
     let bearTokenId: BigNumber;
 
     before(async () => {
-      [registry, market] = await setupWithERC721();
-      bullTokenId = await registry.getTokenId(market.address, c.tokenType.BULL);
-      bearTokenId = await registry.getTokenId(market.address, c.tokenType.BEAR);
-      await registry.connect(accounts[1]).setApprovalForAll(market.address, true);
+      p = await PiSwap.create();
+      market = await p.deplyoMarketERC721();
+      bullTokenId = await p.registry.getTokenId(market.address, c.tokenType.BULL);
+      bearTokenId = await p.registry.getTokenId(market.address, c.tokenType.BEAR);
+      await p.registry.connect(accounts[1]).setApprovalForAll(market.address, true);
       await market.connect(accounts[1]).purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('1'),
       });
@@ -82,9 +83,9 @@ describe('Market', async () => {
       expect(ethBalance.sub(await ethers.provider.getBalance(accounts[0].address))).to.equal(
         ethers.utils.parseEther('1')
       );
-      expect(await registry.balanceOf(accounts[0].address, bullTokenId)).to.equal('2496244366549824737105');
-      expect(await registry.balanceOf(market.address, bullTokenId)).to.equal('2503755633450175262895');
-      expect(await registry.balanceOf(market.address, bearTokenId)).to.equal(ethers.utils.parseEther('5000'));
+      expect(await p.registry.balanceOf(accounts[0].address, bullTokenId)).to.equal('2496244366549824737105');
+      expect(await p.registry.balanceOf(market.address, bullTokenId)).to.equal('2503755633450175262895');
+      expect(await p.registry.balanceOf(market.address, bearTokenId)).to.equal(ethers.utils.parseEther('5000'));
       expect(await market.ethReserve()).to.equal(ethers.utils.parseEther('3'));
     });
 
@@ -100,8 +101,8 @@ describe('Market', async () => {
       expect(ethBalance.sub(await ethers.provider.getBalance(accounts[0].address))).to.equal(
         ethers.utils.parseEther('1')
       );
-      expect(await registry.balanceOf(accounts[0].address, bearTokenId)).to.equal('2494993744999381263456');
-      expect(await registry.balanceOf(market.address, bearTokenId)).to.equal('2505006255000618736544');
+      expect(await p.registry.balanceOf(accounts[0].address, bearTokenId)).to.equal('2494993744999381263456');
+      expect(await p.registry.balanceOf(market.address, bearTokenId)).to.equal('2505006255000618736544');
       expect(await market.ethReserve()).to.equal(ethers.utils.parseEther('4'));
     });
   });

@@ -1,9 +1,9 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { PiSwapMarket, PiSwapRegistry } from '../../typechain-types';
+import { PiSwapMarket } from '../../typechain-types';
 import c from '../constants';
-import { deployProxy, setupWithERC721 } from '../utils';
+import { deployProxy, PiSwap } from '../utils';
 
 describe('Market', async () => {
   let accounts: SignerWithAddress[];
@@ -12,12 +12,13 @@ describe('Market', async () => {
   });
 
   describe('Token redemption', async () => {
-    let registry: PiSwapRegistry;
+    let p: PiSwap;
     let market: PiSwapMarket;
     let ownerAddress: string;
     before(async () => {
       ownerAddress = accounts[8].address;
-      [registry, market] = await setupWithERC721(ownerAddress);
+      p = await PiSwap.create(ownerAddress);
+      market = await p.deplyoMarketERC721();
     });
 
     it('should be able to redeem tokens', async () => {
@@ -26,20 +27,20 @@ describe('Market', async () => {
       });
       const balance = await ethers.provider.getBalance(accounts[0].address);
       const ownerBalance = await ethers.provider.getBalance(ownerAddress);
-      const tokenIdBull = await registry.getTokenId(market.address, c.tokenType.BULL);
-      const tokenIdBear = await registry.getTokenId(market.address, c.tokenType.BEAR);
+      const tokenIdBull = await p.registry.getTokenId(market.address, c.tokenType.BULL);
+      const tokenIdBear = await p.registry.getTokenId(market.address, c.tokenType.BEAR);
       const tx = market.redeemTokens(c.tokensFor1Eth, 0, c.unix2100, {
         gasPrice: 0,
       });
       await expect(tx).to.emit(market, 'TokensRedeemed');
-      expect(await registry.balanceOf(accounts[0].address, tokenIdBull)).to.equal('0');
-      expect(await registry.balanceOf(accounts[0].address, tokenIdBear)).to.equal('0');
+      expect(await p.registry.balanceOf(accounts[0].address, tokenIdBull)).to.equal('0');
+      expect(await p.registry.balanceOf(accounts[0].address, tokenIdBear)).to.equal('0');
       expect(await ethers.provider.getBalance(accounts[0].address)).to.equal(
         balance.add(ethers.utils.parseEther('0.997'))
       );
       expect(await ethers.provider.getBalance(market.address)).to.equal('0');
-      expect(await registry.totalSupply(tokenIdBull)).to.equal('0');
-      expect(await registry.totalSupply(tokenIdBear)).to.equal('0');
+      expect(await p.registry.totalSupply(tokenIdBull)).to.equal('0');
+      expect(await p.registry.totalSupply(tokenIdBear)).to.equal('0');
       expect(await ethers.provider.getBalance(ownerAddress)).to.equal(
         ownerBalance.add(ethers.utils.parseEther('0.003'))
       );
@@ -57,8 +58,8 @@ describe('Market', async () => {
       await market.redeemTokens(c.tokensFor1Eth, 0, c.unix2100);
       const bullId = await market.getTokenId(c.tokenType.BULL);
       const bearId = await market.getTokenId(c.tokenType.BEAR);
-      expect(await registry.totalSupply(bullId)).to.equal('0');
-      expect(await registry.totalSupply(bearId)).to.equal('0');
+      expect(await p.registry.totalSupply(bullId)).to.equal('0');
+      expect(await p.registry.totalSupply(bearId)).to.equal('0');
     });
 
     it('should not be able to redeem 0 tokens', async () => {
@@ -81,12 +82,11 @@ describe('Market', async () => {
   });
 
   describe('Token redemption without fees', () => {
-    let registry: PiSwapRegistry;
+    let p: PiSwap;
     let market: PiSwapMarket;
-    let ownerAddress: string;
     before(async () => {
-      ownerAddress = (await deployProxy()).address;
-      [registry, market] = await setupWithERC721(ownerAddress);
+      p = await PiSwap.create();
+      market = await p.deplyoMarketERC721();
     });
 
     it('should be able to redeem tokens', async () => {
@@ -94,19 +94,19 @@ describe('Market', async () => {
         value: ethers.utils.parseEther('1'),
       });
       const balance = await ethers.provider.getBalance(accounts[0].address);
-      const tokenIdBull = await registry.getTokenId(market.address, c.tokenType.BULL);
-      const tokenIdBear = await registry.getTokenId(market.address, c.tokenType.BEAR);
+      const tokenIdBull = await p.registry.getTokenId(market.address, c.tokenType.BULL);
+      const tokenIdBear = await p.registry.getTokenId(market.address, c.tokenType.BEAR);
       const tx = market.redeemTokens(c.tokensFor1Eth, 0, c.unix2100, {
         gasPrice: 0,
       });
       await expect(tx).to.emit(market, 'TokensRedeemed');
-      expect(await registry.balanceOf(accounts[0].address, tokenIdBull)).to.equal('0');
-      expect(await registry.balanceOf(accounts[0].address, tokenIdBear)).to.equal('0');
+      expect(await p.registry.balanceOf(accounts[0].address, tokenIdBull)).to.equal('0');
+      expect(await p.registry.balanceOf(accounts[0].address, tokenIdBear)).to.equal('0');
       expect(await ethers.provider.getBalance(accounts[0].address)).to.equal(balance.add(ethers.utils.parseEther('1')));
       expect(await ethers.provider.getBalance(market.address)).to.equal('0');
-      expect(await registry.totalSupply(tokenIdBull)).to.equal('0');
-      expect(await registry.totalSupply(tokenIdBear)).to.equal('0');
-      expect(await ethers.provider.getBalance(ownerAddress)).to.equal('0');
+      expect(await p.registry.totalSupply(tokenIdBull)).to.equal('0');
+      expect(await p.registry.totalSupply(tokenIdBear)).to.equal('0');
+      expect(await ethers.provider.getBalance(p.beneficiary)).to.equal('0');
     });
   });
 });

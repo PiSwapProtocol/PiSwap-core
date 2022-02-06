@@ -2,9 +2,9 @@ import { BigNumber } from '@ethersproject/bignumber';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { PiSwapMarket, PiSwapRegistry } from '../../typechain-types';
+import { PiSwapMarket } from '../../typechain-types';
 import c from '../constants';
-import { setupWithERC721 } from '../utils';
+import { PiSwap } from '../utils';
 
 describe('Market', async () => {
   let accounts: SignerWithAddress[];
@@ -13,17 +13,18 @@ describe('Market', async () => {
   });
 
   describe('Adding liquidity', async () => {
-    let registry: PiSwapRegistry;
+    let p: PiSwap;
     let market: PiSwapMarket;
     let bullTokenId: BigNumber;
     let bearTokenId: BigNumber;
     let LiquidityTokenId: BigNumber;
 
     before(async () => {
-      [registry, market] = await setupWithERC721();
-      bullTokenId = await registry.getTokenId(market.address, c.tokenType.BULL);
-      bearTokenId = await registry.getTokenId(market.address, c.tokenType.BEAR);
-      LiquidityTokenId = await registry.getTokenId(market.address, c.tokenType.LIQUIDITY);
+      p = await PiSwap.create();
+      market = await p.deplyoMarketERC721();
+      bullTokenId = await p.registry.getTokenId(market.address, c.tokenType.BULL);
+      bearTokenId = await p.registry.getTokenId(market.address, c.tokenType.BEAR);
+      LiquidityTokenId = await p.registry.getTokenId(market.address, c.tokenType.LIQUIDITY);
       await market.purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('1.5'),
       });
@@ -68,7 +69,7 @@ describe('Market', async () => {
     });
 
     it('should be able to provide initial liquidity', async () => {
-      await registry.setApprovalForAll(market.address, true);
+      await p.registry.setApprovalForAll(market.address, true);
       const tx = market.addLiquidity(0, ethers.utils.parseEther('200'), ethers.utils.parseEther('1000'), c.unix2100, {
         value: ethers.utils.parseEther('1.5'),
       });
@@ -81,11 +82,11 @@ describe('Market', async () => {
           ethers.utils.parseEther('1000')
         );
       expect(await market.ethReserve()).to.be.equal(ethers.utils.parseEther('1.5'));
-      expect(await registry.balanceOf(accounts[0].address, LiquidityTokenId)).to.be.equal(
+      expect(await p.registry.balanceOf(accounts[0].address, LiquidityTokenId)).to.be.equal(
         ethers.utils.parseEther('1.5')
       );
-      expect(await registry.balanceOf(market.address, bullTokenId)).to.be.equal(ethers.utils.parseEther('200'));
-      expect(await registry.balanceOf(market.address, bearTokenId)).to.be.equal(ethers.utils.parseEther('1000'));
+      expect(await p.registry.balanceOf(market.address, bullTokenId)).to.be.equal(ethers.utils.parseEther('200'));
+      expect(await p.registry.balanceOf(market.address, bearTokenId)).to.be.equal(ethers.utils.parseEther('1000'));
     });
 
     it('should fail if min liquidity not reached', async () => {
@@ -119,7 +120,7 @@ describe('Market', async () => {
     });
 
     it('should be able to provide additional liquidity', async () => {
-      await registry.connect(accounts[1]).setApprovalForAll(market.address, true);
+      await p.registry.connect(accounts[1]).setApprovalForAll(market.address, true);
       const tx = market
         .connect(accounts[1])
         .addLiquidity(0, ethers.utils.parseEther('400'), ethers.utils.parseEther('2000'), c.unix2100, {
@@ -134,9 +135,9 @@ describe('Market', async () => {
           ethers.utils.parseEther('2000')
         );
       expect(await market.ethReserve()).to.equal(ethers.utils.parseEther('4.5'));
-      expect(await registry.balanceOf(accounts[1].address, LiquidityTokenId)).to.equal(ethers.utils.parseEther('3'));
-      expect(await registry.balanceOf(market.address, bullTokenId)).to.equal(ethers.utils.parseEther('600'));
-      expect(await registry.balanceOf(market.address, bearTokenId)).to.equal(ethers.utils.parseEther('3000'));
+      expect(await p.registry.balanceOf(accounts[1].address, LiquidityTokenId)).to.equal(ethers.utils.parseEther('3'));
+      expect(await p.registry.balanceOf(market.address, bullTokenId)).to.equal(ethers.utils.parseEther('600'));
+      expect(await p.registry.balanceOf(market.address, bearTokenId)).to.equal(ethers.utils.parseEther('3000'));
     });
   });
 });

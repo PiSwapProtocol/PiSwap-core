@@ -1,9 +1,9 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { ERC1155, ERC721, PiSwapMarket, PiSwapRegistry } from '../../typechain-types';
+import { ERC1155, ERC721, PiSwapMarket } from '../../typechain-types';
 import c from '../constants';
-import { setupWithERC1155, setupWithERC721 } from '../utils';
+import { PiSwap } from '../utils';
 
 describe('Market', async () => {
   let accounts: SignerWithAddress[];
@@ -12,16 +12,18 @@ describe('Market', async () => {
   });
 
   describe('NFT sell: ERC721', async () => {
-    let registry: PiSwapRegistry;
+    let p: PiSwap;
     let market: PiSwapMarket;
     let token: ERC721;
 
     before(async () => {
-      [registry, market, token] = await setupWithERC721();
+      p = await PiSwap.create();
+      token = await p.deployERC721();
+      market = await p.deployMarket({ address: token.address, tokenId: '0' });
       await market.purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('1.999999999999999999'),
       });
-      await registry.setApprovalForAll(market.address, true);
+      await p.registry.setApprovalForAll(market.address, true);
       await token.setApprovalForAll(market.address, true);
     });
 
@@ -58,16 +60,18 @@ describe('Market', async () => {
   });
 
   describe('NFT sell: ERC1155', async () => {
-    let registry: PiSwapRegistry;
+    let p: PiSwap;
     let market: PiSwapMarket;
     let token: ERC1155;
 
     before(async () => {
-      [registry, market, token] = await setupWithERC1155();
+      p = await PiSwap.create();
+      token = await p.deployERC1155();
+      market = await p.deployMarket({ address: token.address, tokenId: '0' });
       await market.purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('1.999999999999999999'),
       });
-      await registry.setApprovalForAll(market.address, true);
+      await p.registry.setApprovalForAll(market.address, true);
       await token.setApprovalForAll(market.address, true);
     });
 

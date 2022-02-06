@@ -2,13 +2,14 @@ import { expect } from 'chai';
 import { ethers } from 'hardhat';
 import { PiSwapMarket } from '../../typechain-types';
 import c from '../constants';
+import { PiSwap } from '../utils';
 
 describe('Market', async () => {
   describe('Pure functions', async () => {
     let market: PiSwapMarket;
     before(async () => {
-      const factory = await ethers.getContractFactory('PiSwapMarket');
-      market = await factory.deploy();
+      const p = await PiSwap.create(ethers.constants.AddressZero);
+      market = await p.deplyoMarketERC721();
     });
 
     it('max supply should be 1,000,000 tokens', async () => {

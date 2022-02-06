@@ -2,9 +2,9 @@ import { BigNumber } from '@ethersproject/bignumber';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { PiSwapMarket, PiSwapRegistry } from '../../typechain-types';
+import { PiSwapMarket } from '../../typechain-types';
 import c from '../constants';
-import { setupWithERC721 } from '../utils';
+import { PiSwap } from '../utils';
 
 describe('Market', async () => {
   let accounts: SignerWithAddress[];
@@ -13,23 +13,24 @@ describe('Market', async () => {
   });
 
   describe('Swap sell tokens', async () => {
-    let registry: PiSwapRegistry;
+    let p: PiSwap;
     let market: PiSwapMarket;
     let bullTokenId: BigNumber;
     let bearTokenId: BigNumber;
 
     before(async () => {
-      [registry, market] = await setupWithERC721();
-      bullTokenId = await registry.getTokenId(market.address, c.tokenType.BULL);
-      bearTokenId = await registry.getTokenId(market.address, c.tokenType.BEAR);
-      await registry.connect(accounts[1]).setApprovalForAll(market.address, true);
+      p = await PiSwap.create();
+      market = await p.deplyoMarketERC721();
+      bullTokenId = await p.registry.getTokenId(market.address, c.tokenType.BULL);
+      bearTokenId = await p.registry.getTokenId(market.address, c.tokenType.BEAR);
+      await p.registry.connect(accounts[1]).setApprovalForAll(market.address, true);
       await market.connect(accounts[1]).purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('1'),
       });
       await market.purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('1'),
       });
-      await registry.setApprovalForAll(market.address, true);
+      await p.registry.setApprovalForAll(market.address, true);
     });
 
     it('should not be able to swap when no liquidity present', async () => {
@@ -71,7 +72,7 @@ describe('Market', async () => {
     });
 
     it('should be able to swap bull tokens for eth', async () => {
-      const tokenBalance = await registry.balanceOf(accounts[0].address, bullTokenId);
+      const tokenBalance = await p.registry.balanceOf(accounts[0].address, bullTokenId);
       const ethBalance = await ethers.provider.getBalance(accounts[0].address);
       const tx = market.swapTokenToEth(c.tokenType.BULL, c.afterFee5000Tokens, 0, c.unix2100, {
         gasPrice: 0,
@@ -79,7 +80,7 @@ describe('Market', async () => {
       await expect(tx)
         .to.emit(market, 'SwapTokenSell')
         .withArgs(accounts[0].address, c.tokenType.BULL, c.afterFee5000Tokens, ethers.utils.parseEther('0.5'));
-      expect(tokenBalance.sub(await registry.balanceOf(accounts[0].address, bullTokenId))).to.equal(
+      expect(tokenBalance.sub(await p.registry.balanceOf(accounts[0].address, bullTokenId))).to.equal(
         c.afterFee5000Tokens
       );
       expect((await ethers.provider.getBalance(accounts[0].address)).sub(ethBalance)).to.equal(
@@ -89,7 +90,7 @@ describe('Market', async () => {
     });
 
     it('should be able to swap bear tokens for eth', async () => {
-      const tokenBalance = await registry.balanceOf(accounts[0].address, bearTokenId);
+      const tokenBalance = await p.registry.balanceOf(accounts[0].address, bearTokenId);
       const ethBalance = await ethers.provider.getBalance(accounts[0].address);
       const tx = market.swapTokenToEth(c.tokenType.BEAR, c.afterFee5000Tokens, 0, c.unix2100, {
         gasPrice: 0,
@@ -99,7 +100,7 @@ describe('Market', async () => {
       await expect(tx)
         .to.emit(market, 'SwapTokenSell')
         .withArgs(accounts[0].address, c.tokenType.BEAR, c.afterFee5000Tokens, balanceDifference);
-      expect(tokenBalance.sub(await registry.balanceOf(accounts[0].address, bearTokenId))).to.equal(
+      expect(tokenBalance.sub(await p.registry.balanceOf(accounts[0].address, bearTokenId))).to.equal(
         c.afterFee5000Tokens
       );
       expect(balanceDifference).to.equal('500250501002004008');

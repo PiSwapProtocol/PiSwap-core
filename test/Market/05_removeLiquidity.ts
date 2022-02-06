@@ -2,9 +2,9 @@ import { BigNumber } from '@ethersproject/bignumber';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { PiSwapMarket, PiSwapRegistry, ProxyTest } from '../../typechain-types';
+import { PiSwapMarket, ProxyTest } from '../../typechain-types';
 import c from '../constants';
-import { deployProxy, setupWithERC721 } from '../utils';
+import { deployProxy, PiSwap } from '../utils';
 
 describe('Market', async () => {
   let accounts: SignerWithAddress[];
@@ -13,7 +13,7 @@ describe('Market', async () => {
   });
 
   describe('Removing liquidity', async () => {
-    let registry: PiSwapRegistry;
+    let p: PiSwap;
     let market: PiSwapMarket;
     let bullTokenId: BigNumber;
     let bearTokenId: BigNumber;
@@ -21,11 +21,12 @@ describe('Market', async () => {
     let proxy: ProxyTest;
 
     before(async () => {
-      [registry, market] = await setupWithERC721();
+      p = await PiSwap.create();
+      market = await p.deplyoMarketERC721();
       proxy = await deployProxy(market.address);
-      bullTokenId = await registry.getTokenId(market.address, c.tokenType.BULL);
-      bearTokenId = await registry.getTokenId(market.address, c.tokenType.BEAR);
-      LiquidityTokenId = await registry.getTokenId(market.address, c.tokenType.LIQUIDITY);
+      bullTokenId = await p.registry.getTokenId(market.address, c.tokenType.BULL);
+      bearTokenId = await p.registry.getTokenId(market.address, c.tokenType.BEAR);
+      LiquidityTokenId = await p.registry.getTokenId(market.address, c.tokenType.LIQUIDITY);
       await market.purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('1.5'),
       });
@@ -60,8 +61,8 @@ describe('Market', async () => {
     });
 
     it('should be able to remove liquidity', async () => {
-      await registry.setApprovalForAll(market.address, true);
-      await registry.connect(accounts[1]).setApprovalForAll(market.address, true);
+      await p.registry.setApprovalForAll(market.address, true);
+      await p.registry.connect(accounts[1]).setApprovalForAll(market.address, true);
       await market
         .connect(accounts[1])
         .addLiquidity(0, ethers.utils.parseEther('200'), ethers.utils.parseEther('1000'), c.unix2100, {
@@ -88,9 +89,9 @@ describe('Market', async () => {
           ethers.utils.parseEther('1000')
         );
       expect(await market.ethReserve()).to.equal(ethers.utils.parseEther('1.5'));
-      expect(await registry.balanceOf(accounts[1].address, LiquidityTokenId)).to.equal('0');
-      expect(await registry.balanceOf(market.address, bullTokenId)).to.equal(ethers.utils.parseEther('200'));
-      expect(await registry.balanceOf(market.address, bearTokenId)).to.equal(ethers.utils.parseEther('1000'));
+      expect(await p.registry.balanceOf(accounts[1].address, LiquidityTokenId)).to.equal('0');
+      expect(await p.registry.balanceOf(market.address, bullTokenId)).to.equal(ethers.utils.parseEther('200'));
+      expect(await p.registry.balanceOf(market.address, bearTokenId)).to.equal(ethers.utils.parseEther('1000'));
     });
 
     it('should fail due to insufficient balance', async () => {
