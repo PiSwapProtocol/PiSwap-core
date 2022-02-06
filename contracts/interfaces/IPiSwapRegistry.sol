@@ -5,6 +5,8 @@ import "./Types.sol";
 
 interface IPiSwapRegistry {
     event MarketCreated(address indexed market, address indexed NFTContract, uint256 indexed tokenId);
+    event Deposit(address indexed account, uint256 amount);
+    event Withdrawal(address indexed account, uint256 amount);
 
     function createMarket(address _tokenAddress, uint256 _tokenId) external returns (address market);
 
@@ -23,4 +25,8 @@ interface IPiSwapRegistry {
         uint256 _amount,
         TokenType _tokenType
     ) external;
+
+    function deposit(uint256 _amount) external;
+
+    function withdraw(uint256 _amount) external;
 }

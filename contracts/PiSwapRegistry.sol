@@ -124,6 +124,18 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
         _burn(_from, tokenId, _amount);
     }
 
+    function deposit(uint256 _amount) public {
+        WETH.transferFrom(_msgSender(), address(this), _amount);
+        _mint(_msgSender(), 0, _amount, "");
+        emit Deposit(_msgSender(), _amount);
+    }
+
+    function withdraw(uint256 _amount) public {
+        _burn(_msgSender(), 0, _amount);
+        WETH.transfer(_msgSender(), _amount);
+        emit Withdrawal(_msgSender(), _amount);
+    }
+
     function _getNFTType(address _tokenAddress) private view returns (NFTType) {
         IERC165Upgradeable token = IERC165Upgradeable(_tokenAddress);
         if (token.supportsInterface(0x80ac58cd)) {
