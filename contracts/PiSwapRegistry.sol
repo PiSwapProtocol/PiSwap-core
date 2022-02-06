@@ -2,6 +2,7 @@
 pragma solidity 0.8.11;
 
 import "./interfaces/IPiSwapRegistry.sol";
+import "./interfaces/IWETH.sol";
 
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155SupplyUpgradeable.sol";
 import "./lib/BeaconUpgradeable.sol";
@@ -27,7 +28,10 @@ struct NFT {
 /// @title  Token Registry
 /// @notice Implements the ERC1155 token standard and deploys new markets
 /// @dev    Due to the contract size limitations, a separate contract deploys the market contracts
-contract PiSwapRegistry is BeaconUpgradeable, ERC1155SupplyUpgradeable, IPiSwapRegistry {
+contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgradeable {
+    IWETH public WETH;
+    address public beneficiary;
+
     // market address => token data
     mapping(address => NFT) public nftInfo;
     // nft contract address => token id => market address
@@ -42,13 +46,17 @@ contract PiSwapRegistry is BeaconUpgradeable, ERC1155SupplyUpgradeable, IPiSwapR
 
     function initialize(
         address _owner,
+        address _beneficiary,
         address _marketImplementation,
-        string memory _uri
+        address _weth,
+        string calldata _uri
     ) external initializer {
         __Owned_init(_owner);
         __Beacon_init(_marketImplementation);
         __ERC1155_init(_uri);
         __ERC1155Supply_init();
+        beneficiary = _beneficiary;
+        WETH = IWETH(_weth);
     }
 
     /// @notice Creates a new market for a specified NFT

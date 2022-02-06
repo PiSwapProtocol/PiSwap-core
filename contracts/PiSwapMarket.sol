@@ -3,20 +3,28 @@ pragma solidity 0.8.11;
 
 import "./interfaces/IPiSwapMarket.sol";
 import "./interfaces/IPiSwapRegistry.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 
 import "@openzeppelin/contracts-upgradeable/token/ERC721/utils/ERC721HolderUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/utils/ERC1155HolderUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
+
+interface IRegistry is IPiSwapRegistry, IERC1155 {
+    function beneficiary() external view returns (address);
+
+    function totalSupply(uint256 id) external view returns (uint256);
+}
 
 contract PiSwapMarket is
-    Initializable,
+    ContextUpgradeable,
     ERC1155HolderUpgradeable,
     ERC721HolderUpgradeable,
     ReentrancyGuardUpgradeable,
     IPiSwapMarket
 {
-    IPiSwapRegistry public registry;
+    IRegistry public registry;
     address public NFTtokenAddress;
     uint256 public NFTtokenId;
     NFTType public nftType;
@@ -49,7 +57,7 @@ contract PiSwapMarket is
         __ERC1155Holder_init();
         __ERC721Holder_init();
         __ReentrancyGuard_init();
-        registry = IPiSwapRegistry(_registry);
+        registry = IRegistry(_registry);
         NFTtokenAddress = _tokenAddress;
         NFTtokenId = _tokenId;
         nftType = _nftType;
@@ -64,8 +72,8 @@ contract PiSwapMarket is
     function purchaseTokens(uint256 _minTokens, uint256 _deadline) public payable ensure(_deadline) nonReentrant {
         uint256 amountEth = msg.value;
         uint256 fee = (amountEth * 3) / 1000;
-        // if transfer to owner token unsuccessful, don't collect fee
-        (bool success, ) = registry.owner().call{value: fee}("");
+        // if transfer to beneficiary unsuccessful, don't collect fee
+        (bool success, ) = registry.beneficiary().call{value: fee}("");
         if (success) {
             amountEth -= fee;
         }
@@ -77,9 +85,9 @@ contract PiSwapMarket is
         uint256 purchasedTokenAmount = supplyAfterPurchase - currentSupply;
         require(purchasedTokenAmount >= _minTokens, "Minimum amount not reached");
         depositedEth += amountEth;
-        registry.mint(msg.sender, purchasedTokenAmount, TokenType.BULL);
-        registry.mint(msg.sender, purchasedTokenAmount, TokenType.BEAR);
-        emit TokensPurchased(msg.sender, msg.value, purchasedTokenAmount);
+        registry.mint(_msgSender(), purchasedTokenAmount, TokenType.BULL);
+        registry.mint(_msgSender(), purchasedTokenAmount, TokenType.BEAR);
+        emit TokensPurchased(_msgSender(), msg.value, purchasedTokenAmount);
     }
 
     /// @notice redeem tokens from the contract
@@ -98,16 +106,16 @@ contract PiSwapMarket is
         amountEth = (amountEth * marketProfit()) / 1 ether;
         uint256 fee = (amountEth * 3) / 1000;
         depositedEth = depositedEthAfterSell;
-        // if transfer to owner unsuccessful, don't collect fee
-        (bool success, ) = registry.owner().call{value: fee}("");
+        // if transfer to beneficiary unsuccessful, don't collect fee
+        (bool success, ) = registry.beneficiary().call{value: fee}("");
         if (success) {
             amountEth -= fee;
         }
         require(amountEth >= _minEth, "Minimum amount not reached");
-        registry.burn(msg.sender, _amount, TokenType.BULL);
-        registry.burn(msg.sender, _amount, TokenType.BEAR);
-        _safeTransfer(msg.sender, amountEth);
-        emit TokensRedeemed(msg.sender, amountEth, _amount);
+        registry.burn(_msgSender(), _amount, TokenType.BULL);
+        registry.burn(_msgSender(), _amount, TokenType.BEAR);
+        _safeTransfer(_msgSender(), amountEth);
+        emit TokensRedeemed(_msgSender(), amountEth, _amount);
     }
 
     /// @notice add liquidity to pool, initial liquidity provider sets ratio
@@ -140,19 +148,19 @@ contract PiSwapMarket is
                 "Slippage"
             );
             ethReserve += msg.value;
-            registry.mint(msg.sender, liquidityMinted, TokenType.LIQUIDITY);
-            registry.safeTransferFrom(msg.sender, address(this), bullId, bullTokenAmount, "");
-            registry.safeTransferFrom(msg.sender, address(this), bearId, bearTokenAmount, "");
-            emit LiquidityAdded(msg.sender, msg.value, bullTokenAmount, bearTokenAmount);
+            registry.mint(_msgSender(), liquidityMinted, TokenType.LIQUIDITY);
+            registry.safeTransferFrom(_msgSender(), address(this), bullId, bullTokenAmount, "");
+            registry.safeTransferFrom(_msgSender(), address(this), bearId, bearTokenAmount, "");
+            emit LiquidityAdded(_msgSender(), msg.value, bullTokenAmount, bearTokenAmount);
             return liquidityMinted;
         } else {
             // initialize pool
             require(msg.value > 0 && _maxBullTokens > 0 && _maxBearTokens > 0);
             ethReserve += msg.value;
-            registry.mint(msg.sender, msg.value, TokenType.LIQUIDITY);
-            registry.safeTransferFrom(msg.sender, address(this), bullId, _maxBullTokens, "");
-            registry.safeTransferFrom(msg.sender, address(this), bearId, _maxBearTokens, "");
-            emit LiquidityAdded(msg.sender, msg.value, _maxBullTokens, _maxBearTokens);
+            registry.mint(_msgSender(), msg.value, TokenType.LIQUIDITY);
+            registry.safeTransferFrom(_msgSender(), address(this), bullId, _maxBullTokens, "");
+            registry.safeTransferFrom(_msgSender(), address(this), bearId, _maxBearTokens, "");
+            emit LiquidityAdded(_msgSender(), msg.value, _maxBullTokens, _maxBearTokens);
             return msg.value;
         }
     }
@@ -192,12 +200,12 @@ contract PiSwapMarket is
         amountBear = (bearReserve * _amount) / liquiditySupply;
         require(amountEth >= _minEth && amountBull >= _minBull && amountBear >= _minBear, "Slippage");
 
-        registry.burn(msg.sender, _amount, TokenType.LIQUIDITY);
-        registry.safeTransferFrom(address(this), msg.sender, bullId, amountBull, "");
-        registry.safeTransferFrom(address(this), msg.sender, bearId, amountBear, "");
+        registry.burn(_msgSender(), _amount, TokenType.LIQUIDITY);
+        registry.safeTransferFrom(address(this), _msgSender(), bullId, amountBull, "");
+        registry.safeTransferFrom(address(this), _msgSender(), bearId, amountBear, "");
         ethReserve -= amountEth;
-        _safeTransfer(msg.sender, amountEth);
-        emit LiquidityRemoved(msg.sender, amountEth, amountBull, amountBear);
+        _safeTransfer(_msgSender(), amountEth);
+        emit LiquidityRemoved(_msgSender(), amountEth, amountBull, amountBear);
     }
 
     /// @notice swaps ETH to token
@@ -223,13 +231,13 @@ contract PiSwapMarket is
 
         registry.safeTransferFrom(
             address(this),
-            msg.sender,
+            _msgSender(),
             _tokenType == TokenType.BULL ? bullId : bearId,
             tokensOut,
             ""
         );
         ethReserve += msg.value;
-        emit SwapTokenPurchase(msg.sender, _tokenType, msg.value, tokensOut);
+        emit SwapTokenPurchase(_msgSender(), _tokenType, msg.value, tokensOut);
     }
 
     /// @notice swaps token to ETH
@@ -256,15 +264,15 @@ contract PiSwapMarket is
         require(ethOut >= _minEth, "Slippage");
 
         registry.safeTransferFrom(
-            msg.sender,
+            _msgSender(),
             address(this),
             _tokenType == TokenType.BULL ? bullId : bearId,
             _amount,
             ""
         );
         ethReserve -= ethOut;
-        _safeTransfer(msg.sender, ethOut);
-        emit SwapTokenSell(msg.sender, _tokenType, _amount, ethOut);
+        _safeTransfer(_msgSender(), ethOut);
+        emit SwapTokenSell(_msgSender(), _tokenType, _amount, ethOut);
     }
 
     /// @notice swaps ETH for the NFT held by the contract
@@ -276,16 +284,16 @@ contract PiSwapMarket is
         if (nftType == NFTType.ERC721) {
             require(msg.value >= nftValue, "Slippage");
             IERC721_ NFT = IERC721_(NFTtokenAddress);
-            NFT.safeTransferFrom(address(this), msg.sender, NFTtokenId, "");
-            _safeTransfer(msg.sender, msg.value - nftValue);
-            emit NFTPurchase(msg.sender, nftValue, 1);
+            NFT.safeTransferFrom(address(this), _msgSender(), NFTtokenId, "");
+            _safeTransfer(_msgSender(), msg.value - nftValue);
+            emit NFTPurchase(_msgSender(), nftValue, 1);
         } else {
             require(_amount > 0, "Insufficient amount");
             require(msg.value >= nftValue * _amount, "Slippage");
             IERC1155_ NFT = IERC1155_(NFTtokenAddress);
-            NFT.safeTransferFrom(address(this), msg.sender, NFTtokenId, _amount, "");
-            _safeTransfer(msg.sender, msg.value - (nftValue * _amount));
-            emit NFTPurchase(msg.sender, nftValue, _amount);
+            NFT.safeTransferFrom(address(this), _msgSender(), NFTtokenId, _amount, "");
+            _safeTransfer(_msgSender(), msg.value - (nftValue * _amount));
+            emit NFTPurchase(_msgSender(), nftValue, _amount);
         }
     }
 
@@ -305,18 +313,18 @@ contract PiSwapMarket is
             require(_NFTSwapEnabled(bullReserve, bearReserve, 1), "NFT swapping not enabled");
             require(nftValue >= _minEth, "Slippage");
             IERC721_ NFT = IERC721_(NFTtokenAddress);
-            NFT.safeTransferFrom(msg.sender, address(this), NFTtokenId, "");
-            _safeTransfer(msg.sender, nftValue);
-            emit NFTSell(msg.sender, nftValue, 1);
+            NFT.safeTransferFrom(_msgSender(), address(this), NFTtokenId, "");
+            _safeTransfer(_msgSender(), nftValue);
+            emit NFTSell(_msgSender(), nftValue, 1);
         } else {
             require(_amount > 0, "Insufficient amount");
             require(_NFTSwapEnabled(bullReserve, bearReserve, _amount), "NFT swapping not enabled");
             uint256 ethOut = nftValue * _amount;
             require(ethOut >= _minEth, "Slippage");
             IERC1155_ NFT = IERC1155_(NFTtokenAddress);
-            NFT.safeTransferFrom(msg.sender, address(this), NFTtokenId, _amount, "");
-            _safeTransfer(msg.sender, ethOut);
-            emit NFTSell(msg.sender, nftValue, _amount);
+            NFT.safeTransferFrom(_msgSender(), address(this), NFTtokenId, _amount, "");
+            _safeTransfer(_msgSender(), ethOut);
+            emit NFTSell(_msgSender(), nftValue, _amount);
         }
     }
 

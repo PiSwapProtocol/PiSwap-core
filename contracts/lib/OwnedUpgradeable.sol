@@ -35,7 +35,7 @@ contract OwnedUpgradeable is Initializable, ContextUpgradeable {
      * @dev Throws if called by any account other than the owner.
      */
     modifier onlyOwner() virtual {
-        require(msg.sender == _owner, "Owned: not owner");
+        require(_msgSender() == _owner, "Owned: not owner");
         _;
     }
 

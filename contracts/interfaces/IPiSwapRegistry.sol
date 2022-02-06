@@ -2,12 +2,9 @@
 pragma solidity 0.8.11;
 
 import "./Types.sol";
-import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 
-interface IPiSwapRegistry is IERC1155 {
+interface IPiSwapRegistry {
     event MarketCreated(address indexed market, address indexed NFTContract, uint256 indexed tokenId);
-
-    function owner() external view returns (address);
 
     function createMarket(address _tokenAddress, uint256 _tokenId) external returns (address market);
 

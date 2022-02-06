@@ -47,7 +47,7 @@ contract BeaconUpgradeable is IBeacon, OwnedUpgradeable {
      *
      * Requirements:
      *
-     * - msg.sender must be the owner of the contract.
+     * - _msgSender() must be the owner of the contract.
      * - `newImplementation` must be a contract.
      */
     function upgradeTo(address newImplementation) public virtual onlyOwner {

@@ -17,7 +17,7 @@ interface IPiSwapMarket {
         uint256 _maxBullTokens,
         uint256 _maxBearTokens,
         uint256 _deadline
-    ) external payable;
+    ) external payable returns (uint256);
 
     function removeLiquidity(
         uint256 _amount,
