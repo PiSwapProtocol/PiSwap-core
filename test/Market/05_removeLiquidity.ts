@@ -61,8 +61,6 @@ describe('Market', async () => {
     });
 
     it('should be able to remove liquidity', async () => {
-      await p.registry.setApprovalForAll(market.address, true);
-      await p.registry.connect(accounts[1]).setApprovalForAll(market.address, true);
       await market
         .connect(accounts[1])
         .addLiquidity(0, ethers.utils.parseEther('200'), ethers.utils.parseEther('1000'), c.unix2100, {

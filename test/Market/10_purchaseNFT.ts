@@ -23,7 +23,6 @@ describe('Market', async () => {
       await market.purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('2'),
       });
-      await p.registry.setApprovalForAll(market.address, true);
       await token.setApprovalForAll(market.address, true);
       await market.addLiquidity(0, ethers.utils.parseEther('1000'), ethers.utils.parseEther('200'), c.unix2100, {
         value: ethers.utils.parseEther('1'),
@@ -71,7 +70,6 @@ describe('Market', async () => {
       await market.purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('4'),
       });
-      await p.registry.setApprovalForAll(market.address, true);
       await token.setApprovalForAll(market.address, true);
       await market.addLiquidity(0, ethers.utils.parseEther('1000'), ethers.utils.parseEther('200'), c.unix2100, {
         value: ethers.utils.parseEther('1'),

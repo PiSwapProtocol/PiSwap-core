@@ -23,14 +23,12 @@ describe('Market', async () => {
       market = await p.deplyoMarketERC721();
       bullTokenId = await p.registry.getTokenId(market.address, c.tokenType.BULL);
       bearTokenId = await p.registry.getTokenId(market.address, c.tokenType.BEAR);
-      await p.registry.connect(accounts[1]).setApprovalForAll(market.address, true);
       await market.connect(accounts[1]).purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('1'),
       });
       await market.purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('1'),
       });
-      await p.registry.setApprovalForAll(market.address, true);
     });
 
     it('should not be able to swap when no liquidity present', async () => {

@@ -60,16 +60,7 @@ describe('Market', async () => {
       ).to.be.reverted;
     });
 
-    it('should fail if contract is not approved as operator', async () => {
-      await expect(
-        market.addLiquidity(0, ethers.utils.parseEther('200'), ethers.utils.parseEther('1000'), c.unix2100, {
-          value: ethers.utils.parseEther('1.5'),
-        })
-      ).to.be.revertedWith(c.errorMessages.approval);
-    });
-
     it('should be able to provide initial liquidity', async () => {
-      await p.registry.setApprovalForAll(market.address, true);
       const tx = market.addLiquidity(0, ethers.utils.parseEther('200'), ethers.utils.parseEther('1000'), c.unix2100, {
         value: ethers.utils.parseEther('1.5'),
       });
@@ -120,7 +111,6 @@ describe('Market', async () => {
     });
 
     it('should be able to provide additional liquidity', async () => {
-      await p.registry.connect(accounts[1]).setApprovalForAll(market.address, true);
       const tx = market
         .connect(accounts[1])
         .addLiquidity(0, ethers.utils.parseEther('400'), ethers.utils.parseEther('2000'), c.unix2100, {

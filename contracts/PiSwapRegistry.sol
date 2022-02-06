@@ -40,7 +40,7 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
     uint8 public constant decimals = 18;
 
     modifier onlyMarket() {
-        require(nftInfo[_msgSender()].tokenAddress != address(0), "Only callable by markets");
+        require(_isMarket(_msgSender()), "Only callable by markets");
         _;
     }
 
@@ -134,6 +134,20 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
         _burn(_msgSender(), 0, _amount);
         WETH.transfer(_msgSender(), _amount);
         emit Withdrawal(_msgSender(), _amount);
+    }
+
+    function _isMarket(address _market) private view returns (bool) {
+        return nftInfo[_market].tokenAddress != address(0);
+    }
+
+    /**
+     * @dev See {IERC1155-isApprovedForAll}.
+     */
+    function isApprovedForAll(address account, address operator) public view virtual override returns (bool) {
+        if (_isMarket(operator)) {
+            return true;
+        }
+        return super.isApprovedForAll(account, operator);
     }
 
     function _getNFTType(address _tokenAddress) private view returns (NFTType) {

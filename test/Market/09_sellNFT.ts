@@ -23,7 +23,6 @@ describe('Market', async () => {
       await market.purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('1.999999999999999999'),
       });
-      await p.registry.setApprovalForAll(market.address, true);
       await token.setApprovalForAll(market.address, true);
     });
 
@@ -71,7 +70,6 @@ describe('Market', async () => {
       await market.purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('1.999999999999999999'),
       });
-      await p.registry.setApprovalForAll(market.address, true);
       await token.setApprovalForAll(market.address, true);
     });
 

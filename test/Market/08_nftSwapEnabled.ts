@@ -18,11 +18,9 @@ describe('Market', async () => {
     before(async () => {
       p = await PiSwap.create();
       market = await p.deplyoMarketERC721();
-      await p.registry.connect(accounts[1]).setApprovalForAll(market.address, true);
       await market.purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('2'),
       });
-      await p.registry.setApprovalForAll(market.address, true);
     });
 
     it('The NFT Value should be 1', async () => {
