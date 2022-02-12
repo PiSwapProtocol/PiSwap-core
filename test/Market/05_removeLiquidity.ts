@@ -24,9 +24,9 @@ describe('Market', async () => {
       p = await PiSwap.create();
       market = await p.deplyoMarketERC721();
       proxy = await deployProxy(market.address);
-      bullTokenId = await p.registry.getTokenId(market.address, c.tokenType.BULL);
-      bearTokenId = await p.registry.getTokenId(market.address, c.tokenType.BEAR);
-      LiquidityTokenId = await p.registry.getTokenId(market.address, c.tokenType.LIQUIDITY);
+      bullTokenId = p.getTokenId(market, c.tokenType.BULL);
+      bearTokenId = p.getTokenId(market, c.tokenType.BEAR);
+      LiquidityTokenId = p.getTokenId(market, c.tokenType.LIQUIDITY);
       await market.purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('1.5'),
       });

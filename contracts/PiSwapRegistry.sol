@@ -2,7 +2,8 @@
 pragma solidity 0.8.11;
 
 import "./interfaces/IPiSwapRegistry.sol";
-import "./interfaces/IWETH.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155SupplyUpgradeable.sol";
 import "./lib/BeaconUpgradeable.sol";
@@ -23,19 +24,23 @@ struct NFT {
     uint256 tokenId;
 }
 
-// TODO implement beneficiary
-
 /// @title  Token Registry
 /// @notice Implements the ERC1155 token standard and deploys new markets
 /// @dev    Due to the contract size limitations, a separate contract deploys the market contracts
 contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgradeable {
-    IWETH public WETH;
+    using TokenTypeLib for TokenType;
+    using SafeERC20Upgradeable for IERC20Upgradeable;
+    using AddressUpgradeable for address;
+
+    address public WETH;
     address public beneficiary;
 
     // market address => token data
     mapping(address => NFT) public nftInfo;
     // nft contract address => token id => market address
     mapping(address => mapping(uint256 => address)) public markets;
+
+    uint256 public fee;
 
     uint8 public constant decimals = 18;
 
@@ -56,7 +61,8 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
         __ERC1155_init(_uri);
         __ERC1155Supply_init();
         beneficiary = _beneficiary;
-        WETH = IWETH(_weth);
+        fee = 50;
+        WETH = _weth;
     }
 
     /// @notice Creates a new market for a specified NFT
@@ -87,13 +93,6 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
         return data.tokenAddress != address(0);
     }
 
-    /// @notice Calculates token id
-    /// @param _market    market smart contract address
-    /// @param _tokenType type of the token
-    function getTokenId(address _market, TokenType _tokenType) public pure returns (uint256) {
-        return uint256(keccak256(abi.encodePacked(_market, _tokenType)));
-    }
-
     /// @notice Mint tokens to an address
     /// @dev              only callable by markets
     /// @param _to        address to mint the tokens to
@@ -105,7 +104,7 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
         TokenType _tokenType
     ) public onlyMarket {
         require(_amount > 0, "Amount can't be zero");
-        uint256 tokenId = getTokenId(_msgSender(), _tokenType);
+        uint256 tokenId = _tokenType.id(_msgSender());
         _mint(_to, tokenId, _amount, "");
     }
 
@@ -120,20 +119,31 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
         TokenType _tokenType
     ) public onlyMarket {
         require(_amount > 0, "Amount can't be zero");
-        uint256 tokenId = getTokenId(_msgSender(), _tokenType);
+        uint256 tokenId = _tokenType.id(_msgSender());
         _burn(_from, tokenId, _amount);
     }
 
+    function setFee(uint256 _fee) public onlyOwner {
+        fee = _fee;
+    }
+
+    function setBeneficiary(address _beneficiary) public onlyOwner {
+        if (_beneficiary.isContract()) {
+            require(IERC165Upgradeable(_beneficiary).supportsInterface(0x4e2312e0), "PiSwapRegistry#setBeneficiary: DOES_NOT_SUPPORT_ERC1155RECEIVER");
+        }
+        beneficiary = _beneficiary;
+    }
+
     function deposit(uint256 _amount) public {
-        WETH.transferFrom(_msgSender(), address(this), _amount);
+        IERC20Upgradeable(WETH).safeTransferFrom(_msgSender(), address(this), _amount);
         _mint(_msgSender(), 0, _amount, "");
         emit Deposit(_msgSender(), _amount);
     }
 
-    function withdraw(uint256 _amount) public {
+    function withdraw(uint256 _amount, address _to) public {
         _burn(_msgSender(), 0, _amount);
-        WETH.transfer(_msgSender(), _amount);
-        emit Withdrawal(_msgSender(), _amount);
+        IERC20Upgradeable(WETH).safeTransfer(_to, _amount);
+        emit Withdrawal(_msgSender(), _to, _amount);
     }
 
     function _isMarket(address _market) private view returns (bool) {

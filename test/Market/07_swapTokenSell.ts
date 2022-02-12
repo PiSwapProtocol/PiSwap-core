@@ -21,8 +21,8 @@ describe('Market', async () => {
     before(async () => {
       p = await PiSwap.create();
       market = await p.deplyoMarketERC721();
-      bullTokenId = await p.registry.getTokenId(market.address, c.tokenType.BULL);
-      bearTokenId = await p.registry.getTokenId(market.address, c.tokenType.BEAR);
+      bullTokenId = p.getTokenId(market, c.tokenType.BULL);
+      bearTokenId = p.getTokenId(market, c.tokenType.BEAR);
       await market.connect(accounts[1]).purchaseTokens(0, c.unix2100, {
         value: ethers.utils.parseEther('1'),
       });

@@ -8,71 +8,159 @@ import { PiSwap } from '../utils';
 
 describe('Market', async () => {
   let accounts: SignerWithAddress[];
+  let p: PiSwap;
+  let market: PiSwapMarket;
   before(async () => {
     accounts = await ethers.getSigners();
+    p = await PiSwap.create(accounts[8].address);
+    await p.weth.deposit({ value: ethers.utils.parseEther('10') });
+    await p.weth.approve(p.router.address, ethers.constants.MaxUint256);
+    market = await p.deplyoMarketERC721();
   });
 
-  describe('Token purchase', async () => {
-    let p: PiSwap;
-    let market: PiSwapMarket;
-    let ownerAddress: string;
-    before(async () => {
-      ownerAddress = accounts[8].address;
-      p = await PiSwap.create(ownerAddress);
-      market = await p.deplyoMarketERC721();
+  describe('Token mint', async () => {
+    it('amount in and out should match for both swap kinds', async () => {
+      const amountIn = ethers.utils.parseEther('0.892748923748972389');
+      const amountOutCalculated = await market.mintOutGivenIn(amountIn);
+      const amountInCalculated = await market.mintInGivenOut(amountOutCalculated);
+      expect(await p.mintOutGivenIn(market, amountIn)).to.equal(amountOutCalculated);
+      expect(await p.mintInGivenOut(market, amountOutCalculated)).to.equal(amountIn);
+      expect(amountIn).to.equal(amountInCalculated);
     });
 
-    it('should be able to purchase tokens', async () => {
-      const ownerBalance = await ethers.provider.getBalance(ownerAddress);
-      const tokenIdBull = await p.registry.getTokenId(market.address, c.tokenType.BULL);
-      const tokenIdBear = await p.registry.getTokenId(market.address, c.tokenType.BEAR);
-      const tx = market.purchaseTokens(0, c.unix2100, {
-        value: c.afterFee1Eth,
-        gasPrice: 0,
+    it('should be able to mint tokens given amount in', async () => {
+      const amountIn = ethers.utils.parseEther('1');
+      const tokenIdBull = p.getTokenId(market, c.tokenType.BULL);
+      const tokenIdBear = p.getTokenId(market, c.tokenType.BEAR);
+      const { amountOut, fee } = await p.mintOutGivenInWithFee(market, amountIn);
+
+      const tx = p.router.mint(market.address, {
+        amount: amountIn,
+        kind: c.swapKind.GIVEN_IN,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
       });
-      await expect(tx).to.emit(market, 'TokensPurchased');
-      expect(await p.registry.balanceOf(accounts[0].address, tokenIdBull)).to.equal(c.tokensFor1Eth);
-      expect(await p.registry.balanceOf(accounts[0].address, tokenIdBear)).to.equal(c.tokensFor1Eth);
-      expect(await ethers.provider.getBalance(market.address)).to.equal(ethers.utils.parseEther('1'));
-      expect(await p.registry.totalSupply(tokenIdBull)).to.equal(c.tokensFor1Eth);
-      expect(await p.registry.totalSupply(tokenIdBear)).to.equal(c.tokensFor1Eth);
-      expect(await ethers.provider.getBalance(ownerAddress)).to.equal(ownerBalance.add(c.feeFor1Eth));
+
+      await expect(tx).to.emit(market, 'Minted').withArgs(p.router.address, accounts[0].address, amountIn, amountOut);
+      await expect(tx).to.emit(p.router, 'Minted').withArgs(market.address, accounts[0].address, amountIn, amountOut);
+      await expect(tx)
+        .to.emit(p.registry, 'TransferSingle')
+        .withArgs(market.address, market.address, await p.registry.beneficiary(), '0', fee);
+
+      expect(await p.registry.balanceOf(accounts[0].address, tokenIdBull)).to.equal(amountOut);
+      expect(await p.registry.balanceOf(accounts[0].address, tokenIdBear)).to.equal(amountOut);
+      expect(await market.depositedEth1()).to.equal(amountIn.sub(fee));
+      expect(await p.registry.totalSupply(tokenIdBull)).to.equal(amountOut);
+      expect(await p.registry.totalSupply(tokenIdBear)).to.equal(await p.registry.totalSupply(tokenIdBull));
     });
 
-    it('should fail when sending 0 ETH', async () => {
-      await expect(market.purchaseTokens(0, c.unix2100)).to.be.revertedWith(c.errorMessages.notZero);
+    it('should be able to mint tokens given out', async () => {
+      const amountOut = ethers.utils.parseEther('10000');
+      const { amountIn, fee } = await p.mintInGivenOutWithFee(market, amountOut);
+
+      const tx = p.router.mint(market.address, {
+        amount: amountOut,
+        kind: c.swapKind.GIVEN_OUT,
+        to: accounts[0].address,
+        slippage: ethers.constants.MaxUint256,
+        deadline: c.unix2100,
+        userData: [],
+      });
+
+      await expect(tx).to.emit(market, 'Minted').withArgs(p.router.address, accounts[0].address, amountIn, amountOut);
+      await expect(tx).to.emit(p.router, 'Minted').withArgs(market.address, accounts[0].address, amountIn, amountOut);
+      await expect(tx)
+        .to.emit(p.registry, 'TransferSingle')
+        .withArgs(market.address, market.address, await p.registry.beneficiary(), '0', fee);
+    });
+
+    it('should revert when sending 0 ETH', async () => {
+      const tx = p.router.mint(market.address, {
+        amount: '0',
+        kind: c.swapKind.GIVEN_IN,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
+      });
+
+      await expect(tx).to.be.revertedWith('PiSwapMarket#mint: AMOUNT_ZERO');
     });
 
     it('should fail if minimum amount was not reached', async () => {
-      await expect(market.purchaseTokens(c.maxUint, c.unix2100)).to.be.revertedWith(c.errorMessages.minAmount);
+      const tx1 = p.router.mint(market.address, {
+        amount: ethers.utils.parseEther('1'),
+        kind: c.swapKind.GIVEN_IN,
+        to: accounts[0].address,
+        slippage: ethers.constants.MaxUint256,
+        deadline: c.unix2100,
+        userData: [],
+      });
+
+      const tx2 = p.router.mint(market.address, {
+        amount: ethers.utils.parseEther('1'),
+        kind: c.swapKind.GIVEN_OUT,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
+      });
+      await expect(tx1).to.be.revertedWith('PiSwapMarket#mint: SLIPPAGE');
+      await expect(tx2).to.be.revertedWith('PiSwapMarket#mint: SLIPPAGE');
     });
 
     it('should fail if deadline was reached', async () => {
-      await expect(market.purchaseTokens(0, 0)).to.be.revertedWith(c.errorMessages.expired);
+      const tx = p.router.mint(market.address, {
+        amount: ethers.utils.parseEther('1'),
+        kind: c.swapKind.GIVEN_IN,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: 0,
+        userData: [],
+      });
+
+      await expect(tx).to.be.revertedWith('PiSwapMarket#mint: EXPIRED');
     });
   });
-  describe('Token purchase without fees', () => {
-    let p: PiSwap;
-    let market: PiSwapMarket;
+  describe('Token mint without fees', () => {
     before(async () => {
-      p = await PiSwap.create();
-      market = await p.deplyoMarketERC721();
+      await p.registry.connect(accounts[8]).setFee(0);
     });
 
-    it('should be able to purchase tokens', async () => {
-      const tokenIdBull = await p.registry.getTokenId(market.address, c.tokenType.BULL);
-      const tokenIdBear = await p.registry.getTokenId(market.address, c.tokenType.BEAR);
-      const tx = await market.purchaseTokens(0, c.unix2100, {
-        value: ethers.utils.parseEther('1'),
-        gasPrice: 0,
+    it('should be able to mint tokens given amount in without fees', async () => {
+      const amountIn = ethers.utils.parseEther('1');
+      const amountOut = await p.mintOutGivenIn(market, amountIn);
+
+      const tx = p.router.mint(market.address, {
+        amount: amountIn,
+        kind: c.swapKind.GIVEN_IN,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
       });
-      await expect(tx).to.emit(market, 'TokensPurchased');
-      expect(await p.registry.balanceOf(accounts[0].address, tokenIdBull)).to.equal(c.tokensFor1Eth);
-      expect(await p.registry.balanceOf(accounts[0].address, tokenIdBear)).to.equal(c.tokensFor1Eth);
-      expect(await ethers.provider.getBalance(market.address)).to.equal(ethers.utils.parseEther('1'));
-      expect(await p.registry.totalSupply(tokenIdBull)).to.equal(c.tokensFor1Eth);
-      expect(await p.registry.totalSupply(tokenIdBear)).to.equal(c.tokensFor1Eth);
-      expect(await ethers.provider.getBalance(p.beneficiary)).to.equal('0');
+
+      await expect(tx).to.emit(market, 'Minted').withArgs(p.router.address, accounts[0].address, amountIn, amountOut);
+      await expect(tx).to.emit(p.router, 'Minted').withArgs(market.address, accounts[0].address, amountIn, amountOut);
+    });
+
+    it('should be able to mint tokens given out without fee', async () => {
+      const amountOut = ethers.utils.parseEther('10000');
+      const amountIn = await p.mintInGivenOut(market, amountOut);
+
+      const tx = p.router.mint(market.address, {
+        amount: amountOut,
+        kind: c.swapKind.GIVEN_OUT,
+        to: accounts[0].address,
+        slippage: ethers.constants.MaxUint256,
+        deadline: c.unix2100,
+        userData: [],
+      });
+
+      await expect(tx).to.emit(market, 'Minted').withArgs(p.router.address, accounts[0].address, amountIn, amountOut);
+      await expect(tx).to.emit(p.router, 'Minted').withArgs(market.address, accounts[0].address, amountIn, amountOut);
     });
   });
 });

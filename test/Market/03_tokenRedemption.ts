@@ -27,8 +27,8 @@ describe('Market', async () => {
       });
       const balance = await ethers.provider.getBalance(accounts[0].address);
       const ownerBalance = await ethers.provider.getBalance(ownerAddress);
-      const tokenIdBull = await p.registry.getTokenId(market.address, c.tokenType.BULL);
-      const tokenIdBear = await p.registry.getTokenId(market.address, c.tokenType.BEAR);
+      const tokenIdBull = p.getTokenId(market, c.tokenType.BULL);
+      const tokenIdBear = p.getTokenId(market, c.tokenType.BEAR);
       const tx = market.redeemTokens(c.tokensFor1Eth, 0, c.unix2100, {
         gasPrice: 0,
       });
@@ -94,8 +94,8 @@ describe('Market', async () => {
         value: ethers.utils.parseEther('1'),
       });
       const balance = await ethers.provider.getBalance(accounts[0].address);
-      const tokenIdBull = await p.registry.getTokenId(market.address, c.tokenType.BULL);
-      const tokenIdBear = await p.registry.getTokenId(market.address, c.tokenType.BEAR);
+      const tokenIdBull = p.getTokenId(market, c.tokenType.BULL);
+      const tokenIdBear = p.getTokenId(market, c.tokenType.BEAR);
       const tx = market.redeemTokens(c.tokensFor1Eth, 0, c.unix2100, {
         gasPrice: 0,
       });

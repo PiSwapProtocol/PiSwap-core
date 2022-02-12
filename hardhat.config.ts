@@ -29,9 +29,7 @@ const config: HardhatUserConfig = {
       },
       gasPrice: 8000000000,
     },
-    hardhat: {
-      initialBaseFeePerGas: 0,
-    },
+    hardhat: {},
   },
   solidity: {
     compilers: [
@@ -50,13 +48,25 @@ const config: HardhatUserConfig = {
     currency: 'USD',
     gasPrice: 100,
     enabled: process.env.REPORT_GAS === 'true',
-    excludeContracts: ['ProxyTest', 'SampleERC165', 'SampleERC721', 'SampleERC1155', 'UpgradeTestA', 'UpgradeTestB'],
+    excludeContracts: [
+      'ProxyTest',
+      'SampleERC165',
+      'ERC721',
+      'SampleERC721',
+      'SampleERC1155',
+      'UpgradeTestA',
+      'UpgradeTestB',
+      'WETH9',
+    ],
   },
   etherscan: {
     apiKey: process.env.ETHERSCAN_TOKEN,
   },
   mocha: {
     timeout: 100000,
+  },
+  typechain: {
+    alwaysGenerateOverloads: true,
   },
 };
 

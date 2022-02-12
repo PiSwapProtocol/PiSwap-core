@@ -1,10 +1,22 @@
 //SPDX-License-Identifier:AGPL-3.0-only
 pragma solidity 0.8.11;
 
-import "./Types.sol";
+import "./Arguments.sol";
 
-interface IPiSwapMarket {
-    function purchaseTokens(uint256 _minTokens, uint256 _deadline) external payable;
+interface IPiSwapMarket is Arguments {
+    event Minted(address indexed sender, address indexed to, uint256 amountIn, uint256 amountOut);
+
+    /// @notice mint bull and bear tokens
+    /// @param args see {Arguments-Mint}
+    /// @return amountIn amount of ETH in
+    /// @return amountOut amount of Bull and Bear tokens out
+    function mint(Arguments.Mint calldata args) external returns (uint256 amountIn, uint256 amountOut);
+
+    function mintOutGivenIn(uint256 _amountIn) external view returns (uint256 amountOut);
+
+    function mintInGivenOut(uint256 _amountOut) external view returns (uint256 amountIn);
+
+    //////////////////////////////////////////
 
     function redeemTokens(
         uint256 _amount,

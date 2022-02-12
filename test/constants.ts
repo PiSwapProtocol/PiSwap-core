@@ -22,13 +22,18 @@ export default {
     burnInsufficientBalance: 'ERC1155: burn amount exceeds balance',
   },
   tokenType: {
-    BULL: 0,
-    BEAR: 1,
-    LIQUIDITY: 2,
+    ETH: 0,
+    BULL: 1,
+    BEAR: 2,
+    LIQUIDITY: 3,
   },
   NFTType: {
     ERC721: 0,
     ERC1155: 1,
+  },
+  swapKind: {
+    GIVEN_IN: 0,
+    GIVEN_OUT: 1,
   },
   after1Eth: '9900990099009900990100',
   afterFee1Eth,

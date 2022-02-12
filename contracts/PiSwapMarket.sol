@@ -3,38 +3,34 @@ pragma solidity 0.8.11;
 
 import "./interfaces/IPiSwapMarket.sol";
 import "./interfaces/IPiSwapRegistry.sol";
-import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
+import "./lib/PiSwapLibrary.sol";
 
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/utils/ERC721HolderUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/utils/ERC1155HolderUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
 
-interface IRegistry is IPiSwapRegistry, IERC1155 {
-    function beneficiary() external view returns (address);
+import "hardhat/console.sol";
 
+interface IRegistry is IPiSwapRegistry, IERC1155 {
     function totalSupply(uint256 id) external view returns (uint256);
 }
 
-contract PiSwapMarket is
-    ContextUpgradeable,
-    ERC1155HolderUpgradeable,
-    ERC721HolderUpgradeable,
-    ReentrancyGuardUpgradeable,
-    IPiSwapMarket
-{
+contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721HolderUpgradeable, ReentrancyGuardUpgradeable, IPiSwapMarket {
+    using TokenTypeLib for TokenType;
+    using SwapKindLib for SwapKind;
+
     IRegistry public registry;
     address public NFTtokenAddress;
     uint256 public NFTtokenId;
     NFTType public nftType;
     uint256 public ethReserve;
 
-    uint256 public depositedEth = 0;
-
+    uint256 public depositedEth;
     uint256 public constant MAX_SUPPLY = 1000000 ether;
 
-    event TokensPurchased(address indexed sender, uint256 amountEth, uint256 amountTokens);
     event TokensRedeemed(address indexed sender, uint256 amountEth, uint256 amountTokens);
     event LiquidityAdded(address indexed sender, uint256 amountEth, uint256 amountBull, uint256 amountBear);
     event LiquidityRemoved(address indexed sender, uint256 amountEth, uint256 amountBull, uint256 amountBear);
@@ -43,8 +39,8 @@ contract PiSwapMarket is
     event NFTPurchase(address indexed buyer, uint256 nftValue, uint256 amount);
     event NFTSell(address indexed seller, uint256 nftValue, uint256 amount);
 
-    modifier ensure(uint256 _deadline) {
-        require(block.timestamp < _deadline, "expired");
+    modifier ensure(uint256 _deadline, string memory _method) {
+        require(block.timestamp < _deadline, _errMsg(_method, "EXPIRED"));
         _;
     }
 
@@ -63,31 +59,29 @@ contract PiSwapMarket is
         nftType = _nftType;
     }
 
-    // TODO add return values to purchase and redeem functions
+    /// @notice see {IPiSwapMarket-mint}
+    function mint(Arguments.Mint calldata args) external ensure(args.deadline, "mint") returns (uint256 amountIn, uint256 amountOut) {
+        require(args.amount != 0, _errMsg("mint", "AMOUNT_ZERO"));
+        uint256 fee;
 
-    /// @notice purchase tokens from the contract
-    /// @dev              in case the market is at a loss / profit, it is evened out using the marketProfit function
-    /// @param _minTokens minimum desired amount to receive after purchase (amount x provided means x bull tokens and x bear tokens)
-    /// @param _deadline  time after which the transaction should not be executed anymore
-    function purchaseTokens(uint256 _minTokens, uint256 _deadline) public payable ensure(_deadline) nonReentrant {
-        uint256 amountEth = msg.value;
-        uint256 fee = (amountEth * 3) / 1000;
-        // if transfer to beneficiary unsuccessful, don't collect fee
-        (bool success, ) = registry.beneficiary().call{value: fee}("");
-        if (success) {
-            amountEth -= fee;
+        if (args.kind.givenIn()) {
+            amountIn = args.amount;
+            fee = (amountIn * registry.fee()) / 10000;
+            amountOut = mintOutGivenIn(amountIn - fee);
+            require(amountOut >= args.slippage, _errMsg("mint", "SLIPPAGE"));
+        } else {
+            amountOut = args.amount;
+            uint256 amountInWithoutFee = mintInGivenOut(amountOut);
+            amountIn = (amountInWithoutFee * 10000) / (10000 - registry.fee());
+            fee = amountIn - amountInWithoutFee;
+            require(amountIn <= args.slippage, _errMsg("mint", "SLIPPAGE"));
         }
-        amountEth = (amountEth * 1 ether) / _marketProfit(address(this).balance - amountEth);
-        uint256 supplyAfterPurchase = tokenFormula(depositedEth + amountEth);
-        // Bull and bear tokens always have the same total supply
-        uint256 id = getTokenId(TokenType.BULL);
-        uint256 currentSupply = registry.totalSupply(id);
-        uint256 purchasedTokenAmount = supplyAfterPurchase - currentSupply;
-        require(purchasedTokenAmount >= _minTokens, "Minimum amount not reached");
-        depositedEth += amountEth;
-        registry.mint(_msgSender(), purchasedTokenAmount, TokenType.BULL);
-        registry.mint(_msgSender(), purchasedTokenAmount, TokenType.BEAR);
-        emit TokensPurchased(_msgSender(), msg.value, purchasedTokenAmount);
+
+        registry.safeTransferFrom(_msgSender(), address(this), 0, amountIn, "");
+        if (fee != 0) registry.safeTransferFrom(address(this), registry.beneficiary(), 0, fee, "");
+        registry.mint(args.to, amountOut, TokenType.BULL);
+        registry.mint(args.to, amountOut, TokenType.BEAR);
+        emit Minted(_msgSender(), args.to, amountIn, amountOut);
     }
 
     /// @notice redeem tokens from the contract
@@ -99,7 +93,7 @@ contract PiSwapMarket is
         uint256 _amount,
         uint256 _minEth,
         uint256 _deadline
-    ) public ensure(_deadline) nonReentrant {
+    ) public nonReentrant {
         uint256 id = getTokenId(TokenType.BULL);
         uint256 depositedEthAfterSell = inverseTokenFormula(registry.totalSupply(id) - _amount);
         uint256 amountEth = depositedEth - depositedEthAfterSell;
@@ -129,7 +123,7 @@ contract PiSwapMarket is
         uint256 _maxBullTokens,
         uint256 _maxBearTokens,
         uint256 _deadline
-    ) public payable ensure(_deadline) nonReentrant returns (uint256) {
+    ) public payable nonReentrant returns (uint256) {
         uint256 bullId = getTokenId(TokenType.BULL);
         uint256 bearId = getTokenId(TokenType.BEAR);
         uint256 liquiditySupply = registry.totalSupply(getTokenId(TokenType.LIQUIDITY));
@@ -141,12 +135,7 @@ contract PiSwapMarket is
             uint256 bullTokenAmount = (totalTokenAmount * bullReserve) / totalTokenReserve;
             uint256 bearTokenAmount = totalTokenAmount - bullTokenAmount;
             uint256 liquidityMinted = (msg.value * liquiditySupply) / ethReserve;
-            require(
-                liquidityMinted >= _minLiquidity &&
-                    _maxBullTokens >= bullTokenAmount &&
-                    _maxBearTokens >= bearTokenAmount,
-                "Slippage"
-            );
+            require(liquidityMinted >= _minLiquidity && _maxBullTokens >= bullTokenAmount && _maxBearTokens >= bearTokenAmount, "Slippage");
             ethReserve += msg.value;
             registry.mint(_msgSender(), liquidityMinted, TokenType.LIQUIDITY);
             registry.safeTransferFrom(_msgSender(), address(this), bullId, bullTokenAmount, "");
@@ -217,25 +206,18 @@ contract PiSwapMarket is
         TokenType _tokenType,
         uint256 _minTokens,
         uint256 _deadline
-    ) public payable ensure(_deadline) nonReentrant returns (uint256 tokensOut) {
+    ) public payable nonReentrant returns (uint256 tokensOut) {
         require(msg.value > 0);
         require(_tokenType != TokenType.LIQUIDITY, "Cannot swap liquidity token");
 
         (uint256 bullId, uint256 bearId, uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
         require(ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
 
-        uint256 tokenEthReserve = (ethReserve * (_tokenType == TokenType.BULL ? bearReserve : bullReserve)) /
-            (bullReserve + bearReserve);
+        uint256 tokenEthReserve = (ethReserve * (_tokenType == TokenType.BULL ? bearReserve : bullReserve)) / (bullReserve + bearReserve);
         tokensOut = _getPrice(msg.value, tokenEthReserve, _tokenType == TokenType.BULL ? bullReserve : bearReserve);
         require(tokensOut >= _minTokens, "Slippage");
 
-        registry.safeTransferFrom(
-            address(this),
-            _msgSender(),
-            _tokenType == TokenType.BULL ? bullId : bearId,
-            tokensOut,
-            ""
-        );
+        registry.safeTransferFrom(address(this), _msgSender(), _tokenType == TokenType.BULL ? bullId : bearId, tokensOut, "");
         ethReserve += msg.value;
         emit SwapTokenPurchase(_msgSender(), _tokenType, msg.value, tokensOut);
     }
@@ -251,25 +233,18 @@ contract PiSwapMarket is
         uint256 _amount,
         uint256 _minEth,
         uint256 _deadline
-    ) public ensure(_deadline) nonReentrant returns (uint256 ethOut) {
+    ) public nonReentrant returns (uint256 ethOut) {
         require(_amount > 0);
         require(_tokenType != TokenType.LIQUIDITY, "Cannot swap liquidity token");
 
         (uint256 bullId, uint256 bearId, uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
         require(ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
 
-        uint256 tokenEthReserve = (ethReserve * (_tokenType == TokenType.BULL ? bearReserve : bullReserve)) /
-            (bullReserve + bearReserve);
+        uint256 tokenEthReserve = (ethReserve * (_tokenType == TokenType.BULL ? bearReserve : bullReserve)) / (bullReserve + bearReserve);
         ethOut = _getPrice(_amount, _tokenType == TokenType.BULL ? bullReserve : bearReserve, tokenEthReserve);
         require(ethOut >= _minEth, "Slippage");
 
-        registry.safeTransferFrom(
-            _msgSender(),
-            address(this),
-            _tokenType == TokenType.BULL ? bullId : bearId,
-            _amount,
-            ""
-        );
+        registry.safeTransferFrom(_msgSender(), address(this), _tokenType == TokenType.BULL ? bullId : bearId, _amount, "");
         ethReserve -= ethOut;
         _safeTransfer(_msgSender(), ethOut);
         emit SwapTokenSell(_msgSender(), _tokenType, _amount, ethOut);
@@ -279,7 +254,7 @@ contract PiSwapMarket is
     /// @dev    if contract holds NFT, it should be purchasable at all times
     /// @param _deadline time after which the transaction should not be executed anymore
     /// @param _amount   amount of NFT Tokens to swap (ERC1155 only)
-    function buyNFT(uint256 _deadline, uint256 _amount) public payable ensure(_deadline) nonReentrant {
+    function buyNFT(uint256 _deadline, uint256 _amount) public payable nonReentrant {
         uint256 nftValue = NFTValue();
         if (nftType == NFTType.ERC721) {
             require(msg.value >= nftValue, "Slippage");
@@ -305,7 +280,7 @@ contract PiSwapMarket is
         uint256 _minEth,
         uint256 _deadline,
         uint256 _amount
-    ) public ensure(_deadline) nonReentrant {
+    ) public nonReentrant {
         (, , uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
         require(ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
         uint256 nftValue = _NFTValue(bullReserve, bearReserve);
@@ -444,7 +419,13 @@ contract PiSwapMarket is
     /// @param  _tokenType token type
     /// @return            token id
     function getTokenId(TokenType _tokenType) public view returns (uint256) {
-        return uint256(keccak256(abi.encodePacked(address(this), _tokenType)));
+        return uint256(keccak256(abi.encodePacked(block.chainid, address(this), _tokenType)));
+    }
+
+    // prettier-ignore
+    /// @notice gets all token ids
+    function getTokenIds() public view returns (uint256 bullId, uint256 bearId, uint256 liquidityId) {
+        return (TokenType.BULL.id(), TokenType.BEAR.id(), TokenType.LIQUIDITY.id());
     }
 
     /// @notice calculates the total supply based on the amount of ETH deposited into the contract
@@ -460,6 +441,23 @@ contract PiSwapMarket is
     /// @return  amount of ETH deposited into the smart contract
     function inverseTokenFormula(uint256 y) public pure returns (uint256) {
         return (MAX_SUPPLY * 100 ether) / (MAX_SUPPLY - y) - 100 ether;
+    }
+
+    function depositedEth1() public view returns (uint256) {
+        uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
+        return PiSwapLibrary.depositedEth(currentSupply);
+    }
+
+    /// @notice see {PiSwapLibrary-mintOutGivenIn}
+    function mintOutGivenIn(uint256 _amountIn) public view returns (uint256 amountOut) {
+        uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
+        amountOut = PiSwapLibrary.mintOutGivenIn(currentSupply, _amountIn);
+    }
+
+    /// @notice see {PiSwapLibrary-mintInGivenOut}
+    function mintInGivenOut(uint256 _amountOut) public view returns (uint256 amountIn) {
+        uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
+        amountIn = PiSwapLibrary.mintInGivenOut(currentSupply, _amountOut);
     }
 
     // TODO test
@@ -516,6 +514,10 @@ contract PiSwapMarket is
             return 1 ether;
         }
         return ((contractBalance - ethReserve) * 1 ether) / (depositedEth);
+    }
+
+    function _errMsg(string memory _method, string memory _message) private pure returns (string memory) {
+        return string(abi.encodePacked("PiSwapMarket#", _method, ": ", _message));
     }
 
     uint256[50] private __gap;

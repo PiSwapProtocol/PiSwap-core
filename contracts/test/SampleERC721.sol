@@ -15,7 +15,7 @@ contract SampleERC721 is ERC721 {
         _mint(_msgSender(), 0);
     }
 
-    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+    function tokenURI(uint256) public view override returns (string memory) {
         return assetUrl;
     }
 }

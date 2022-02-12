@@ -1,4 +1,4 @@
-//SPDX-License-Identifier:AGPL-3.0-only
+//SPDX-License-Identifier: MIT
 pragma solidity 0.8.11;
 
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -35,7 +35,7 @@ contract OwnedUpgradeable is Initializable, ContextUpgradeable {
      * @dev Throws if called by any account other than the owner.
      */
     modifier onlyOwner() virtual {
-        require(_msgSender() == _owner, "Owned: not owner");
+        require(_msgSender() == _owner, "Owned: ONLY_OWNER");
         _;
     }
 
