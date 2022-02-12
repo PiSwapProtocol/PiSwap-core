@@ -18,12 +18,20 @@ library PiSwapLibrary {
         return (MAX_SUPPLY * 100 ether) / (MAX_SUPPLY - _totalSupply) - 100 ether;
     }
 
+    /// @notice calculates the amount of tokens minted based on the total supply
+    /// @param _totalSupply total supply of bull and bear tokens
+    /// @param _amountIn    amount of ETH in
+    /// @return amountOut   amount of tokens minted
     function mintOutGivenIn(uint256 _totalSupply, uint256 _amountIn) internal pure returns (uint256 amountOut) {
         uint256 currentEth = depositedEth(_totalSupply);
         uint256 supplyAfterMint = totalSupply(currentEth + _amountIn);
         amountOut = supplyAfterMint - _totalSupply;
     }
 
+    /// @notice calculates the amount of ETH in based on the total supply
+    /// @param _totalSupply total supply of bull and bear tokens
+    /// @param _amountOut   desired amount of tokens minted
+    /// @return amountIn    amount of ETH in
     function mintInGivenOut(uint256 _totalSupply, uint256 _amountOut) internal pure returns (uint256 amountIn) {
         uint256 currentEth = depositedEth(_totalSupply);
         /**

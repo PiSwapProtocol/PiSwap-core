@@ -12,8 +12,10 @@ interface IPiSwapMarket is Arguments {
     /// @return amountOut amount of Bull and Bear tokens out
     function mint(Arguments.Mint calldata args) external returns (uint256 amountIn, uint256 amountOut);
 
+    /// @notice see {PiSwapLibrary-mintOutGivenIn}
     function mintOutGivenIn(uint256 _amountIn) external view returns (uint256 amountOut);
 
+    /// @notice see {PiSwapLibrary-mintInGivenOut}
     function mintInGivenOut(uint256 _amountOut) external view returns (uint256 amountIn);
 
     //////////////////////////////////////////
