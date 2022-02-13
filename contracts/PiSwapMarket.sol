@@ -40,13 +40,12 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     function initialize(
         address _tokenAddress,
         uint256 _tokenId,
-        address _registry,
         NFTType _nftType
     ) public initializer {
         __ERC1155Holder_init();
         __ERC721Holder_init();
         __ReentrancyGuard_init();
-        registry = IRegistry(_registry);
+        registry = IRegistry(_msgSender());
         NFTtokenAddress = _tokenAddress;
         NFTtokenId = _tokenId;
         nftType = _nftType;

@@ -14,7 +14,6 @@ interface IMarket {
     function initialize(
         address _tokenAddress,
         uint256 _tokenId,
-        address _registry,
         NFTType _nftType
     ) external;
 }
@@ -79,7 +78,7 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
         market = address(new BeaconProxyOptimized());
         markets[_tokenAddress][_tokenId] = market;
 
-        IMarket(market).initialize(_tokenAddress, _tokenId, address(this), nftType);
+        IMarket(market).initialize(_tokenAddress, _tokenId, nftType);
 
         // register token
         nftInfo[market] = data;
