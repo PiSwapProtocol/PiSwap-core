@@ -34,14 +34,18 @@ describe('Market', async () => {
       const tokenIdBear = p.getTokenId(market, c.tokenType.BEAR);
       const { amountOut, fee } = await p.mintOutGivenInWithFee(market, amountIn);
 
-      const tx = p.router.mint(market.address, {
-        amount: amountIn,
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      });
+      const tx = p.router.mint(
+        market.address,
+        {
+          amount: amountIn,
+          kind: c.swapKind.GIVEN_IN,
+          to: accounts[0].address,
+          slippage: 0,
+          deadline: c.unix2100,
+          userData: [],
+        },
+        true
+      );
 
       await expect(tx).to.emit(market, 'Minted').withArgs(p.router.address, accounts[0].address, amountIn, amountOut);
       await expect(tx).to.emit(p.router, 'Minted').withArgs(market.address, accounts[0].address, amountIn, amountOut);
@@ -60,14 +64,18 @@ describe('Market', async () => {
       const amountOut = ethers.utils.parseEther('10000');
       const { amountIn, fee } = await p.mintInGivenOutWithFee(market, amountOut);
 
-      const tx = p.router.mint(market.address, {
-        amount: amountOut,
-        kind: c.swapKind.GIVEN_OUT,
-        to: accounts[0].address,
-        slippage: ethers.constants.MaxUint256,
-        deadline: c.unix2100,
-        userData: [],
-      });
+      const tx = p.router.mint(
+        market.address,
+        {
+          amount: amountOut,
+          kind: c.swapKind.GIVEN_OUT,
+          to: accounts[0].address,
+          slippage: ethers.constants.MaxUint256,
+          deadline: c.unix2100,
+          userData: [],
+        },
+        true
+      );
 
       await expect(tx).to.emit(market, 'Minted').withArgs(p.router.address, accounts[0].address, amountIn, amountOut);
       await expect(tx).to.emit(p.router, 'Minted').withArgs(market.address, accounts[0].address, amountIn, amountOut);
@@ -77,49 +85,65 @@ describe('Market', async () => {
     });
 
     it('should revert when sending 0 ETH', async () => {
-      const tx = p.router.mint(market.address, {
-        amount: '0',
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      });
+      const tx = p.router.mint(
+        market.address,
+        {
+          amount: '0',
+          kind: c.swapKind.GIVEN_IN,
+          to: accounts[0].address,
+          slippage: 0,
+          deadline: c.unix2100,
+          userData: [],
+        },
+        true
+      );
 
       await expect(tx).to.be.revertedWith('PiSwapMarket#mint: AMOUNT_ZERO');
     });
 
     it('should fail if minimum amount was not reached', async () => {
-      const tx1 = p.router.mint(market.address, {
-        amount: ethers.utils.parseEther('1'),
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: ethers.constants.MaxUint256,
-        deadline: c.unix2100,
-        userData: [],
-      });
+      const tx1 = p.router.mint(
+        market.address,
+        {
+          amount: ethers.utils.parseEther('1'),
+          kind: c.swapKind.GIVEN_IN,
+          to: accounts[0].address,
+          slippage: ethers.constants.MaxUint256,
+          deadline: c.unix2100,
+          userData: [],
+        },
+        true
+      );
 
-      const tx2 = p.router.mint(market.address, {
-        amount: ethers.utils.parseEther('1'),
-        kind: c.swapKind.GIVEN_OUT,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      });
+      const tx2 = p.router.mint(
+        market.address,
+        {
+          amount: ethers.utils.parseEther('1'),
+          kind: c.swapKind.GIVEN_OUT,
+          to: accounts[0].address,
+          slippage: 0,
+          deadline: c.unix2100,
+          userData: [],
+        },
+        true
+      );
       await expect(tx1).to.be.revertedWith('PiSwapMarket#mint: SLIPPAGE');
       await expect(tx2).to.be.revertedWith('PiSwapMarket#mint: SLIPPAGE');
     });
 
     it('should fail if deadline was reached', async () => {
-      const tx = p.router.mint(market.address, {
-        amount: ethers.utils.parseEther('1'),
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: 0,
-        userData: [],
-      });
+      const tx = p.router.mint(
+        market.address,
+        {
+          amount: ethers.utils.parseEther('1'),
+          kind: c.swapKind.GIVEN_IN,
+          to: accounts[0].address,
+          slippage: 0,
+          deadline: 0,
+          userData: [],
+        },
+        true
+      );
 
       await expect(tx).to.be.revertedWith('PiSwapMarket#mint: EXPIRED');
     });
@@ -133,14 +157,18 @@ describe('Market', async () => {
       const amountIn = ethers.utils.parseEther('1');
       const amountOut = await p.mintOutGivenIn(market, amountIn);
 
-      const tx = p.router.mint(market.address, {
-        amount: amountIn,
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      });
+      const tx = p.router.mint(
+        market.address,
+        {
+          amount: amountIn,
+          kind: c.swapKind.GIVEN_IN,
+          to: accounts[0].address,
+          slippage: 0,
+          deadline: c.unix2100,
+          userData: [],
+        },
+        true
+      );
 
       await expect(tx).to.emit(market, 'Minted').withArgs(p.router.address, accounts[0].address, amountIn, amountOut);
       await expect(tx).to.emit(p.router, 'Minted').withArgs(market.address, accounts[0].address, amountIn, amountOut);
@@ -150,14 +178,18 @@ describe('Market', async () => {
       const amountOut = ethers.utils.parseEther('10000');
       const amountIn = await p.mintInGivenOut(market, amountOut);
 
-      const tx = p.router.mint(market.address, {
-        amount: amountOut,
-        kind: c.swapKind.GIVEN_OUT,
-        to: accounts[0].address,
-        slippage: ethers.constants.MaxUint256,
-        deadline: c.unix2100,
-        userData: [],
-      });
+      const tx = p.router.mint(
+        market.address,
+        {
+          amount: amountOut,
+          kind: c.swapKind.GIVEN_OUT,
+          to: accounts[0].address,
+          slippage: ethers.constants.MaxUint256,
+          deadline: c.unix2100,
+          userData: [],
+        },
+        true
+      );
 
       await expect(tx).to.emit(market, 'Minted').withArgs(p.router.address, accounts[0].address, amountIn, amountOut);
       await expect(tx).to.emit(p.router, 'Minted').withArgs(market.address, accounts[0].address, amountIn, amountOut);

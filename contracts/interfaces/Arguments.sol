@@ -19,4 +19,17 @@ interface Arguments {
         uint256 deadline;
         bytes userData;
     }
+
+    /// @notice arguments for burning tokens
+    /// @param amount amount of tokens in/out depending on SwapKind
+    /// @param swapKind see {Types-SwapKind}
+    /// @param (to, slippage, deadline, userData) see {Mint}
+    struct Burn {
+        uint256 amount;
+        SwapKind kind;
+        address to;
+        uint256 slippage;
+        uint256 deadline;
+        bytes userData;
+    }
 }

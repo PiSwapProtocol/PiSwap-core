@@ -3,110 +3,176 @@ import { expect } from 'chai';
 import { ethers } from 'hardhat';
 import { PiSwapMarket } from '../../typechain-types';
 import c from '../constants';
-import { deployProxy, PiSwap } from '../utils';
+import { PiSwap } from '../utils';
 
 describe('Market', async () => {
   let accounts: SignerWithAddress[];
+  let p: PiSwap;
+  let market: PiSwapMarket;
   before(async () => {
     accounts = await ethers.getSigners();
+    p = await PiSwap.create(accounts[8].address);
+    market = await p.deplyoMarketERC721();
+    await p.weth.deposit({ value: ethers.utils.parseEther('10') });
+    await p.weth.approve(p.router.address, ethers.constants.MaxUint256);
+    await p.registry.setApprovalForAll(p.router.address, true);
+    await p.router.mint(
+      market.address,
+      {
+        amount: ethers.utils.parseEther('10'),
+        kind: c.swapKind.GIVEN_IN,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
+      },
+      true
+    );
   });
 
-  describe('Token redemption', async () => {
-    let p: PiSwap;
-    let market: PiSwapMarket;
-    let ownerAddress: string;
-    before(async () => {
-      ownerAddress = accounts[8].address;
-      p = await PiSwap.create(ownerAddress);
-      market = await p.deplyoMarketERC721();
+  describe('Token burn', async () => {
+    it('amount in and out should match for both swap kinds', async () => {
+      const amountOut = ethers.utils.parseEther('1.183045295037582417');
+      const amountInCalculated = await market.burnInGivenOut(amountOut);
+      const amountOutCalculated = await market.burnOutGivenIn(amountInCalculated);
+      expect(await p.burnOutGivenIn(market, amountInCalculated)).to.equal(amountOutCalculated);
+      expect(await p.burnInGivenOut(market, amountOut)).to.equal(amountInCalculated);
+      expect(amountOut).to.equal(amountOutCalculated);
     });
 
-    it('should be able to redeem tokens', async () => {
-      await market.purchaseTokens(0, c.unix2100, {
-        value: c.afterFee1Eth,
+    it('should be able to burn tokens given amount in', async () => {
+      const amountIn = ethers.utils.parseEther('1000');
+      const { amountOut, fee } = await p.burnOutGivenInWithFee(market, amountIn);
+      const tx = p.router.burn(market.address, {
+        amount: amountIn,
+        kind: c.swapKind.GIVEN_IN,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
       });
-      const balance = await ethers.provider.getBalance(accounts[0].address);
-      const ownerBalance = await ethers.provider.getBalance(ownerAddress);
-      const tokenIdBull = p.getTokenId(market, c.tokenType.BULL);
-      const tokenIdBear = p.getTokenId(market, c.tokenType.BEAR);
-      const tx = market.redeemTokens(c.tokensFor1Eth, 0, c.unix2100, {
-        gasPrice: 0,
+
+      await expect(tx).to.emit(market, 'Burned').withArgs(p.router.address, accounts[0].address, amountIn, amountOut);
+      await expect(tx).to.emit(p.router, 'Burned').withArgs(market.address, accounts[0].address, amountIn, amountOut);
+      await expect(tx)
+        .to.emit(p.registry, 'TransferSingle')
+        .withArgs(market.address, market.address, await p.registry.beneficiary(), '0', fee);
+    });
+
+    it('should be able to burn tokens given amount out', async () => {
+      const amountOut = ethers.utils.parseEther('1');
+      const { amountIn, fee } = await p.burnInGivenOutWithFee(market, amountOut);
+
+      const tx = p.router.burn(market.address, {
+        amount: amountOut,
+        kind: c.swapKind.GIVEN_OUT,
+        to: accounts[0].address,
+        slippage: ethers.constants.MaxUint256,
+        deadline: c.unix2100,
+        userData: [],
       });
-      await expect(tx).to.emit(market, 'TokensRedeemed');
-      expect(await p.registry.balanceOf(accounts[0].address, tokenIdBull)).to.equal('0');
-      expect(await p.registry.balanceOf(accounts[0].address, tokenIdBear)).to.equal('0');
-      expect(await ethers.provider.getBalance(accounts[0].address)).to.equal(
-        balance.add(ethers.utils.parseEther('0.997'))
+
+      await expect(tx).to.emit(market, 'Burned').withArgs(p.router.address, accounts[0].address, amountIn, amountOut);
+      await expect(tx).to.emit(p.router, 'Burned').withArgs(market.address, accounts[0].address, amountIn, amountOut);
+      await expect(tx)
+        .to.emit(p.registry, 'TransferSingle')
+        .withArgs(market.address, market.address, await p.registry.beneficiary(), '0', fee);
+    });
+
+    it('should fail when burning a larger amount than the total supply', async () => {
+      const supply = await p.registry.balanceOf(accounts[0].address, p.getTokenId(market, 1));
+      await expect(market.burnOutGivenIn(supply.add(1))).to.be.revertedWith(
+        'PiSwapLibrary#burnOutGivenIn: AMOUNT_EXCEEDS_SUPPLY'
       );
-      expect(await ethers.provider.getBalance(market.address)).to.equal('0');
-      expect(await p.registry.totalSupply(tokenIdBull)).to.equal('0');
-      expect(await p.registry.totalSupply(tokenIdBear)).to.equal('0');
-      expect(await ethers.provider.getBalance(ownerAddress)).to.equal(
-        ownerBalance.add(ethers.utils.parseEther('0.003'))
+      const depositedEth = await market.depositedEth1();
+      await expect(market.burnInGivenOut(depositedEth.add(1))).to.be.revertedWith(
+        'PiSwapLibrary#burnInGivenOut: AMOUNT_EXCEEDS_SUPPLY'
       );
     });
 
-    it('should fail when redeeming a larger amount than the total supply', async () => {
-      await expect(market.redeemTokens('1', 0, c.unix2100, { from: accounts[2].address })).to.be.reverted;
-    });
-
-    it('should fail when having an insufficient balance', async () => {
-      await market.purchaseTokens(0, c.unix2100, {
-        value: c.afterFee1Eth,
-      });
-      await expect(market.redeemTokens('1', 0, c.unix2100, { from: accounts[2].address })).to.be.reverted;
-      await market.redeemTokens(c.tokensFor1Eth, 0, c.unix2100);
-      const bullId = await market.getTokenId(c.tokenType.BULL);
-      const bearId = await market.getTokenId(c.tokenType.BEAR);
-      expect(await p.registry.totalSupply(bullId)).to.equal('0');
-      expect(await p.registry.totalSupply(bearId)).to.equal('0');
-    });
-
-    it('should not be able to redeem 0 tokens', async () => {
-      await expect(market.redeemTokens('0', 0, c.unix2100)).to.be.revertedWith(c.errorMessages.notZero);
+    it('should not be able to burn 0 tokens', async () => {
+      await expect(
+        market.burn({
+          amount: 0,
+          kind: c.swapKind.GIVEN_IN,
+          to: accounts[0].address,
+          slippage: 0,
+          deadline: c.unix2100,
+          userData: [],
+        })
+      ).to.be.revertedWith('PiSwapMarket#burn: AMOUNT_ZERO');
     });
 
     it('should fail if minimum amount was not reached', async () => {
-      await expect(market.redeemTokens('0', c.maxUint, c.unix2100)).to.be.revertedWith(c.errorMessages.minAmount);
+      const tx1 = p.router.burn(market.address, {
+        amount: ethers.utils.parseEther('1000'),
+        kind: c.swapKind.GIVEN_IN,
+        to: accounts[0].address,
+        slippage: ethers.constants.MaxUint256,
+        deadline: c.unix2100,
+        userData: [],
+      });
+      const tx2 = p.router.burn(market.address, {
+        amount: ethers.utils.parseEther('1'),
+        kind: c.swapKind.GIVEN_OUT,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
+      });
+      await expect(tx1).to.be.revertedWith('PiSwapMarket#burn: SLIPPAGE');
+      await expect(tx2).to.be.revertedWith('PiSwapMarket#burn: SLIPPAGE');
     });
 
     it('should fail if deadline was reached', async () => {
-      await expect(market.redeemTokens('0', 0, 0)).to.be.revertedWith(c.errorMessages.expired);
-    });
-
-    it('should fail if ETH transfer fails', async () => {
-      const proxy = await deployProxy(market.address);
-      await proxy.purchase({ value: c.afterFee1Eth });
-      await expect(proxy.redeem(c.tokensFor1Eth)).to.be.revertedWith(c.errorMessages.transferFailed);
+      const tx = p.router.burn(market.address, {
+        amount: ethers.utils.parseEther('1000'),
+        kind: c.swapKind.GIVEN_IN,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: 0,
+        userData: [],
+      });
+      await expect(tx).to.be.revertedWith('PiSwapMarket#burn: EXPIRED');
     });
   });
 
-  describe('Token redemption without fees', () => {
-    let p: PiSwap;
-    let market: PiSwapMarket;
+  describe('Token burn without fees', () => {
     before(async () => {
-      p = await PiSwap.create();
-      market = await p.deplyoMarketERC721();
+      await p.registry.connect(accounts[8]).setFee(0);
     });
 
-    it('should be able to redeem tokens', async () => {
-      await market.purchaseTokens(0, c.unix2100, {
-        value: ethers.utils.parseEther('1'),
+    it('should be able to burn tokens given amount in', async () => {
+      const amountIn = ethers.utils.parseEther('1000');
+      const amountOut = await p.burnOutGivenIn(market, amountIn);
+      const tx = p.router.burn(market.address, {
+        amount: amountIn,
+        kind: c.swapKind.GIVEN_IN,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
       });
-      const balance = await ethers.provider.getBalance(accounts[0].address);
-      const tokenIdBull = p.getTokenId(market, c.tokenType.BULL);
-      const tokenIdBear = p.getTokenId(market, c.tokenType.BEAR);
-      const tx = market.redeemTokens(c.tokensFor1Eth, 0, c.unix2100, {
-        gasPrice: 0,
+
+      await expect(tx).to.emit(market, 'Burned').withArgs(p.router.address, accounts[0].address, amountIn, amountOut);
+      await expect(tx).to.emit(p.router, 'Burned').withArgs(market.address, accounts[0].address, amountIn, amountOut);
+    });
+
+    it('should be able to burn tokens given amount out', async () => {
+      const amountOut = ethers.utils.parseEther('1');
+      const amountIn = await p.burnInGivenOut(market, amountOut);
+
+      const tx = p.router.burn(market.address, {
+        amount: amountOut,
+        kind: c.swapKind.GIVEN_OUT,
+        to: accounts[0].address,
+        slippage: ethers.constants.MaxUint256,
+        deadline: c.unix2100,
+        userData: [],
       });
-      await expect(tx).to.emit(market, 'TokensRedeemed');
-      expect(await p.registry.balanceOf(accounts[0].address, tokenIdBull)).to.equal('0');
-      expect(await p.registry.balanceOf(accounts[0].address, tokenIdBear)).to.equal('0');
-      expect(await ethers.provider.getBalance(accounts[0].address)).to.equal(balance.add(ethers.utils.parseEther('1')));
-      expect(await ethers.provider.getBalance(market.address)).to.equal('0');
-      expect(await p.registry.totalSupply(tokenIdBull)).to.equal('0');
-      expect(await p.registry.totalSupply(tokenIdBear)).to.equal('0');
-      expect(await ethers.provider.getBalance(p.beneficiary)).to.equal('0');
+
+      await expect(tx).to.emit(market, 'Burned').withArgs(p.router.address, accounts[0].address, amountIn, amountOut);
+      await expect(tx).to.emit(p.router, 'Burned').withArgs(market.address, accounts[0].address, amountIn, amountOut);
     });
   });
 });

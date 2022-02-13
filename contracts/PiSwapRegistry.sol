@@ -124,6 +124,7 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
     }
 
     function setFee(uint256 _fee) public onlyOwner {
+        require(fee <= 200);
         fee = _fee;
     }
 

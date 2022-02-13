@@ -2,10 +2,8 @@
 pragma solidity 0.8.11;
 
 import "./interfaces/IPiSwapMarket.sol";
-import "./interfaces/IPiSwapRegistry.sol";
 import "./lib/PiSwapLibrary.sol";
 
-import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/utils/ERC721HolderUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/utils/ERC1155HolderUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
@@ -13,10 +11,6 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
 
 import "hardhat/console.sol";
-
-interface IRegistry is IPiSwapRegistry, IERC1155 {
-    function totalSupply(uint256 id) external view returns (uint256);
-}
 
 contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721HolderUpgradeable, ReentrancyGuardUpgradeable, IPiSwapMarket {
     using TokenTypeLib for TokenType;
@@ -31,7 +25,6 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     uint256 public depositedEth;
     uint256 public constant MAX_SUPPLY = 1000000 ether;
 
-    event TokensRedeemed(address indexed sender, uint256 amountEth, uint256 amountTokens);
     event LiquidityAdded(address indexed sender, uint256 amountEth, uint256 amountBull, uint256 amountBear);
     event LiquidityRemoved(address indexed sender, uint256 amountEth, uint256 amountBull, uint256 amountBear);
     event SwapTokenPurchase(address indexed sender, TokenType indexed tokenType, uint256 amountIn, uint256 amountOut);
@@ -84,32 +77,30 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         emit Minted(_msgSender(), args.to, amountIn, amountOut);
     }
 
-    /// @notice redeem tokens from the contract
-    /// @dev              in case the market is at a loss / profit, it is evened out using the marketProfit function
-    /// @param _amount    amount of tokens to redeem
-    /// @param _minEth    minimum desired amount to receive after redemption
-    /// @param _deadline  time after which the transaction should not be executed anymore
-    function redeemTokens(
-        uint256 _amount,
-        uint256 _minEth,
-        uint256 _deadline
-    ) public nonReentrant {
-        uint256 id = getTokenId(TokenType.BULL);
-        uint256 depositedEthAfterSell = inverseTokenFormula(registry.totalSupply(id) - _amount);
-        uint256 amountEth = depositedEth - depositedEthAfterSell;
-        amountEth = (amountEth * marketProfit()) / 1 ether;
-        uint256 fee = (amountEth * 3) / 1000;
-        depositedEth = depositedEthAfterSell;
-        // if transfer to beneficiary unsuccessful, don't collect fee
-        (bool success, ) = registry.beneficiary().call{value: fee}("");
-        if (success) {
-            amountEth -= fee;
+    /// @notice see {IPiSwapMarket-burn}
+    function burn(Arguments.Burn calldata args) external ensure(args.deadline, "burn") returns (uint256 amountIn, uint256 amountOut) {
+        require(args.amount != 0, _errMsg("burn", "AMOUNT_ZERO"));
+        uint256 fee;
+
+        if (args.kind.givenIn()) {
+            amountIn = args.amount;
+            uint256 amountOutWithoutFee = burnOutGivenIn(amountIn);
+            fee = (amountOutWithoutFee * registry.fee()) / 10000;
+            amountOut = amountOutWithoutFee - fee;
+            require(amountOut >= args.slippage, _errMsg("burn", "SLIPPAGE"));
+        } else {
+            amountOut = args.amount;
+            uint256 amountOutWithFee = (amountOut * 10000) / (10000 - registry.fee());
+            fee = amountOutWithFee - amountOut;
+            amountIn = burnInGivenOut(amountOutWithFee);
+            require(amountIn <= args.slippage, _errMsg("burn", "SLIPPAGE"));
         }
-        require(amountEth >= _minEth, "Minimum amount not reached");
-        registry.burn(_msgSender(), _amount, TokenType.BULL);
-        registry.burn(_msgSender(), _amount, TokenType.BEAR);
-        _safeTransfer(_msgSender(), amountEth);
-        emit TokensRedeemed(_msgSender(), amountEth, _amount);
+
+        registry.burn(_msgSender(), amountIn, TokenType.BULL);
+        registry.burn(_msgSender(), amountIn, TokenType.BEAR);
+        if (fee != 0) registry.safeTransferFrom(address(this), registry.beneficiary(), 0, fee, "");
+        registry.safeTransferFrom(address(this), args.to, 0, amountOut, "");
+        emit Burned(_msgSender(), args.to, amountIn, amountOut);
     }
 
     /// @notice add liquidity to pool, initial liquidity provider sets ratio
@@ -428,21 +419,6 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         return (TokenType.BULL.id(), TokenType.BEAR.id(), TokenType.LIQUIDITY.id());
     }
 
-    /// @notice calculates the total supply based on the amount of ETH deposited into the contract
-    /// @param x amount of ETH deposited into the smart contract
-    /// @return  total supply
-    /// @dev     overflow protection only required on addition
-    function tokenFormula(uint256 x) public pure returns (uint256) {
-        return MAX_SUPPLY - (MAX_SUPPLY * 100 ether) / (x + 100 ether);
-    }
-
-    /// @notice calculates the deposited ETH based on the total supply
-    /// @param y total supply
-    /// @return  amount of ETH deposited into the smart contract
-    function inverseTokenFormula(uint256 y) public pure returns (uint256) {
-        return (MAX_SUPPLY * 100 ether) / (MAX_SUPPLY - y) - 100 ether;
-    }
-
     function depositedEth1() public view returns (uint256) {
         uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
         return PiSwapLibrary.depositedEth(currentSupply);
@@ -460,46 +436,16 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         amountIn = PiSwapLibrary.mintInGivenOut(currentSupply, _amountOut);
     }
 
-    // TODO test
-
-    /// @notice returns current token purchase price with fee
-    /// @param _amount    amount of ETH in
-    /// @return           amount of tokens out
-    function tokenPricePurchaseWithFee(uint256 _amount) public view returns (uint256) {
-        uint256 fee = (_amount * 3) / 1000;
-        return tokenPricePurchase(_amount - fee);
+    /// @notice see {PiSwapLibrary-burnOutGivenIn}
+    function burnOutGivenIn(uint256 _amountIn) public view returns (uint256 amountOut) {
+        uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
+        amountOut = PiSwapLibrary.burnOutGivenIn(currentSupply, _amountIn);
     }
 
-    /// @notice returns current token purchase price
-    /// @dev              does not take fee into consideration
-    /// @param _amount    amount of ETH in
-    /// @return           amount of tokens out
-    function tokenPricePurchase(uint256 _amount) public view returns (uint256) {
-        _amount = (_amount * marketProfit()) / 1 ether;
-        uint256 supplyAfterPurchase = tokenFormula(depositedEth + _amount);
-        uint256 id = getTokenId(TokenType.BULL);
-        uint256 currentSupply = registry.totalSupply(id);
-        return supplyAfterPurchase - currentSupply;
-    }
-
-    /// @notice returns current token redemption price with fee
-    /// @param _amount    amount of tokens in
-    /// @return           amount of ETH out
-    function tokenPriceRedemptionWithFee(uint256 _amount) public view returns (uint256) {
-        uint256 amountEth = tokenPriceRedemption(_amount);
-        uint256 fee = (amountEth * 3) / 1000;
-        return amountEth - fee;
-    }
-
-    /// @notice returns current token redemption price
-    /// @dev              does not take fee into consideration
-    /// @param _amount    amount of tokens in
-    /// @return           amount of ETH out
-    function tokenPriceRedemption(uint256 _amount) public view returns (uint256) {
-        uint256 id = getTokenId(TokenType.BULL);
-        uint256 depositedEthAfterSell = inverseTokenFormula(registry.totalSupply(id) - _amount);
-        uint256 amountEth = depositedEth - depositedEthAfterSell;
-        return (amountEth * marketProfit()) / 1 ether;
+    /// @notice see {PiSwapLibrary-burnInGivenOut}
+    function burnInGivenOut(uint256 _amountOut) public view returns (uint256 amountIn) {
+        uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
+        amountIn = PiSwapLibrary.burnInGivenOut(currentSupply, _amountOut);
     }
 
     /// @notice calculates whether the current market profit or loss

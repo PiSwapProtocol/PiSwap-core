@@ -28,7 +28,7 @@ interface IPiSwapRegistry {
 
     function deposit(uint256 _amount) external;
 
-    function withdraw(uint256 _amount, uint256 _to) external;
+    function withdraw(uint256 _amount, address _to) external;
 
     function beneficiary() external view returns (address);
 
