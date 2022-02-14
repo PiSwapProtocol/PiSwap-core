@@ -24,7 +24,6 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
 
     uint256 public constant MAX_SUPPLY = 1000000 ether;
 
-    event LiquidityRemoved(address indexed sender, uint256 amountEth, uint256 amountBull, uint256 amountBear);
     event SwapTokenPurchase(address indexed sender, TokenType indexed tokenType, uint256 amountIn, uint256 amountOut);
     event SwapTokenSell(address indexed sender, TokenType indexed tokenType, uint256 amountIn, uint256 amountOut);
     event NFTPurchase(address indexed buyer, uint256 nftValue, uint256 amount);
@@ -140,23 +139,10 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         }
     }
 
-    /// @notice remove liquidity from pool
-    /// @param _amount     amount of liquidity tokens to burn
-    /// @param _minEth     minimum desired amount of eth to receive
-    /// @param _minBull    minimum desired amount of bull tokens to receive
-    /// @param _minBear    minimum desired amount of bear tokens to receive
-    /// @param _deadline   time after which the transaction should not be executed anymore
-    /// @return amountEth  amount of eth received
-    /// @return amountBull amount of bull tokens received
-    /// @return amountBear amount of bear tokens received
-    function removeLiquidity(
-        uint256 _amount,
-        uint256 _minEth,
-        uint256 _minBull,
-        uint256 _minBear,
-        uint256 _deadline
-    )
+    /// @notice see {IPiSwapMarket-removeLiquidity}
+    function removeLiquidity(Arguments.RemoveLiquidity calldata args)
         public
+        ensure(args.deadline, "removeLiquidity")
         nonReentrant
         returns (
             uint256 amountEth,
@@ -164,23 +150,19 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
             uint256 amountBear
         )
     {
-        // cannot use modifier here, stack too deep
-        require(block.timestamp < _deadline, "expired");
         uint256 liquiditySupply = registry.totalSupply(TokenType.LIQUIDITY.id());
         require(liquiditySupply > 0);
-        (uint256 bullId, uint256 bearId, uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
 
-        amountEth = (_ethReserve * _amount) / liquiditySupply;
-        amountBull = (bullReserve * _amount) / liquiditySupply;
-        amountBear = (bearReserve * _amount) / liquiditySupply;
-        require(amountEth >= _minEth && amountBull >= _minBull && amountBear >= _minBear, "Slippage");
+        amountEth = (getReserve(TokenType.ETH) * args.amountLiquidity) / liquiditySupply;
+        amountBull = (getReserve(TokenType.BULL) * args.amountLiquidity) / liquiditySupply;
+        amountBear = (getReserve(TokenType.BEAR) * args.amountLiquidity) / liquiditySupply;
+        require(amountEth >= args.minEth && amountBull >= args.minBull && amountBear >= args.minBear, _errMsg("removeLiquidity", "SLIPPAGE"));
 
-        registry.burn(_msgSender(), _amount, TokenType.LIQUIDITY);
-        registry.safeTransferFrom(address(this), _msgSender(), bullId, amountBull, "");
-        registry.safeTransferFrom(address(this), _msgSender(), bearId, amountBear, "");
-        _ethReserve -= amountEth;
-        _safeTransfer(_msgSender(), amountEth);
-        emit LiquidityRemoved(_msgSender(), amountEth, amountBull, amountBear);
+        registry.burn(_msgSender(), args.amountLiquidity, TokenType.LIQUIDITY);
+        registry.safeTransferFrom(address(this), args.to, TokenType.ETH.id(), amountEth, "");
+        registry.safeTransferFrom(address(this), args.to, TokenType.BULL.id(), amountBull, "");
+        registry.safeTransferFrom(address(this), args.to, TokenType.BEAR.id(), amountBear, "");
+        emit LiquidityRemoved(_msgSender(), args.to, args.amountLiquidity, amountEth, amountBull, amountBear);
     }
 
     /// @notice swaps ETH to token

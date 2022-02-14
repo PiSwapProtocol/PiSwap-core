@@ -48,4 +48,20 @@ interface Arguments {
         uint256 deadline;
         bytes userData;
     }
+
+    /// @notice remove liquidity from the pool
+    /// @param amountLiquidity amount of liquidity tokens to burn
+    /// @param minEth minimum amount of ETH out
+    /// @param minBull minimum amount of Bull tokens out
+    /// @param minBear minimum amount of Bear tokens out
+    /// @param (to, deadline, userData) see {Mint}
+    struct RemoveLiquidity {
+        uint256 amountLiquidity;
+        uint256 minEth;
+        uint256 minBull;
+        uint256 minBear;
+        address to;
+        uint256 deadline;
+        bytes userData;
+    }
 }

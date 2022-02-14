@@ -10,55 +10,48 @@ describe('Market', async () => {
   let accounts: SignerWithAddress[];
   let p: PiSwap;
   let market: PiSwapMarket;
+  let LiquidityTokenId: BigNumber;
 
   before(async () => {
     accounts = await ethers.getSigners();
+    p = await PiSwap.create(accounts[8].address);
+    market = await p.deplyoMarketERC721();
+    LiquidityTokenId = p.getTokenId(market, c.tokenType.LIQUIDITY);
+
+    await p.weth.deposit({ value: ethers.utils.parseEther('10') });
+    await p.weth.approve(p.router.address, ethers.constants.MaxUint256);
+    await p.registry.setApprovalForAll(p.router.address, true);
+    await p.weth.connect(accounts[1]).deposit({ value: ethers.utils.parseEther('10') });
+    await p.weth.connect(accounts[1]).approve(p.router.address, ethers.constants.MaxUint256);
+    await p.registry.connect(accounts[1]).setApprovalForAll(p.router.address, true);
+
+    await p.router.mint(
+      market.address,
+      {
+        amount: ethers.utils.parseEther('1.5'),
+        kind: c.swapKind.GIVEN_IN,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
+      },
+      true
+    );
+    await p.router.connect(accounts[1]).mint(
+      market.address,
+      {
+        amount: ethers.utils.parseEther('1.5'),
+        kind: c.swapKind.GIVEN_IN,
+        to: accounts[1].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
+      },
+      true
+    );
   });
 
   describe('Adding liquidity', async () => {
-    let bullTokenId: BigNumber;
-    let bearTokenId: BigNumber;
-    let LiquidityTokenId: BigNumber;
-
-    before(async () => {
-      p = await PiSwap.create(accounts[8].address);
-      market = await p.deplyoMarketERC721();
-      bullTokenId = p.getTokenId(market, c.tokenType.BULL);
-      bearTokenId = p.getTokenId(market, c.tokenType.BEAR);
-      LiquidityTokenId = p.getTokenId(market, c.tokenType.LIQUIDITY);
-      await p.weth.deposit({ value: ethers.utils.parseEther('10') });
-      await p.weth.approve(p.router.address, ethers.constants.MaxUint256);
-      await p.registry.setApprovalForAll(p.router.address, true);
-      await p.weth.connect(accounts[1]).deposit({ value: ethers.utils.parseEther('10') });
-      await p.weth.connect(accounts[1]).approve(p.router.address, ethers.constants.MaxUint256);
-      await p.registry.connect(accounts[1]).setApprovalForAll(p.router.address, true);
-
-      await p.router.mint(
-        market.address,
-        {
-          amount: ethers.utils.parseEther('1.5'),
-          kind: c.swapKind.GIVEN_IN,
-          to: accounts[0].address,
-          slippage: 0,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
-      await p.router.connect(accounts[1]).mint(
-        market.address,
-        {
-          amount: ethers.utils.parseEther('1.5'),
-          kind: c.swapKind.GIVEN_IN,
-          to: accounts[1].address,
-          slippage: 0,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
-    });
-
     it('should fail if deadline was reached', async () => {
       await expect(
         market.addLiquidity({
@@ -142,7 +135,14 @@ describe('Market', async () => {
         );
       await expect(tx)
         .to.emit(p.router, 'LiquidityAdded')
-        .withArgs(market.address, accounts[0].address, ethers.utils.parseEther('1.5'));
+        .withArgs(
+          market.address,
+          accounts[0].address,
+          ethers.utils.parseEther('1.5'),
+          ethers.utils.parseEther('1.5'),
+          ethers.utils.parseEther('200'),
+          ethers.utils.parseEther('1000')
+        );
       await expect(tx)
         .to.emit(p.registry, 'TransferSingle')
         .withArgs(
@@ -228,7 +228,14 @@ describe('Market', async () => {
 
       await expect(tx)
         .to.emit(p.router, 'LiquidityAdded')
-        .withArgs(market.address, accounts[1].address, ethers.utils.parseEther('3'));
+        .withArgs(
+          market.address,
+          accounts[1].address,
+          ethers.utils.parseEther('3'),
+          ethers.utils.parseEther('3'),
+          ethers.utils.parseEther('400'),
+          ethers.utils.parseEther('2000')
+        );
       await expect(tx)
         .to.emit(p.registry, 'TransferSingle')
         .withArgs(

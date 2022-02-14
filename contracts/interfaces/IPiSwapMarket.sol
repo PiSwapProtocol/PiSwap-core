@@ -13,6 +13,7 @@ interface IPiSwapMarket is Arguments {
     event Minted(address indexed sender, address indexed to, uint256 amountIn, uint256 amountOut);
     event Burned(address indexed sender, address indexed to, uint256 amountIn, uint256 amountOut);
     event LiquidityAdded(address indexed sender, address indexed to, uint256 liquidityMinted, uint256 amountEth, uint256 amountBull, uint256 amountBear);
+    event LiquidityRemoved(address indexed sender, address indexed to, uint256 liquidityBurned, uint256 amountEth, uint256 amountBull, uint256 amountBear);
 
     /// @notice mint bull and bear tokens
     /// @param args see {Arguments-Mint}
@@ -39,6 +40,19 @@ interface IPiSwapMarket is Arguments {
             uint256 amountBear
         );
 
+    /// @notice remove liquidity from liquidity pool
+    /// @param args see {Arguments-AddLiquidity}
+    /// @return amountEth  amount of eth out
+    /// @return amountBull amount of bull tokens out
+    /// @return amountBear amount of bear tokens out
+    function removeLiquidity(Arguments.RemoveLiquidity calldata args)
+        external
+        returns (
+            uint256 amountEth,
+            uint256 amountBull,
+            uint256 amountBear
+        );
+
     /// @notice see {PiSwapLibrary-mintOutGivenIn}
     function mintOutGivenIn(uint256 _amountIn) external view returns (uint256 amountOut);
 
@@ -52,20 +66,6 @@ interface IPiSwapMarket is Arguments {
     function burnInGivenOut(uint256 _amountOut) external view returns (uint256 amountIn);
 
     //////////////////////////////////////////
-
-    function removeLiquidity(
-        uint256 _amount,
-        uint256 _minEth,
-        uint256 _minBull,
-        uint256 _minBear,
-        uint256 _deadline
-    )
-        external
-        returns (
-            uint256 amountEth,
-            uint256 amountBull,
-            uint256 amountBear
-        );
 
     function swapEthToToken(
         TokenType _tokenType,
