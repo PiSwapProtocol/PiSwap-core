@@ -29,6 +29,8 @@ interface IPiSwapMarket is Arguments {
     /// @notice add liquidity to liquidity pool
     /// @param args see {Arguments-AddLiquidity}
     /// @return liquidityMinted amount of liquidity tokens minted
+    /// @return amountBull amount of Bull tokens added to the pool
+    /// @return amountBear amount of Bear tokens added to the pool
     function addLiquidity(Arguments.AddLiquidity calldata args)
         external
         returns (

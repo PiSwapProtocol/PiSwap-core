@@ -33,6 +33,11 @@ interface Arguments {
         bytes userData;
     }
 
+    /// @notice add liquidity to the pool
+    /// @param amountEth amount of ETH to add to the pool
+    /// @param minLiquidity minimum amount of liquidity tokens to be minted
+    /// @param maxBull maximum amount of Bull tokens to add to the liquidity pool
+    /// @param maxBear maximum amount of Bear tokens to add to the liquidity pool
     /// @param (to, deadline, userData) see {Mint}
     struct AddLiquidity {
         uint256 amountEth;
