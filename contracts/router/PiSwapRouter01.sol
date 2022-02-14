@@ -54,13 +54,45 @@ contract PiSwapRouter01 is ERC1155Holder, IPiSwapRouter01 {
         emit Burned(_market, msg.sender, amountIn, amountOut);
     }
 
+    function addLiquidity(
+        address _market,
+        Arguments.AddLiquidity calldata _args,
+        bool deposit_
+    )
+        external
+        returns (
+            uint256 liquidityMinted,
+            uint256 amountBull,
+            uint256 amountBear
+        )
+    {
+        IPiSwapMarket market = IPiSwapMarket(_market);
+        registry.safeTransferFrom(msg.sender, address(this), TokenType.BULL.id(_market), _args.maxBull, "");
+        registry.safeTransferFrom(msg.sender, address(this), TokenType.BEAR.id(_market), _args.maxBear, "");
+        _deposit(_args.amountEth, deposit_);
+        (liquidityMinted, amountBull, amountBear) = market.addLiquidity(_args);
+        _refund(_market, _args.maxBull - amountBull, TokenType.BULL);
+        _refund(_market, _args.maxBear - amountBear, TokenType.BEAR);
+        emit LiquidityAdded(_market, msg.sender, liquidityMinted);
+    }
+
     function _deposit(uint256 _amount, bool deposit_) private {
         if (deposit_) {
             WETH.safeTransferFrom(msg.sender, address(this), _amount);
             WETH.approve(address(registry), _amount);
             registry.deposit(_amount);
         } else {
-            registry.safeTransferFrom(msg.sender, address(this), 0, _amount, "");
+            registry.safeTransferFrom(msg.sender, address(this), TokenType.ETH.id(), _amount, "");
+        }
+    }
+
+    function _refund(
+        address _market,
+        uint256 _amount,
+        TokenType _type
+    ) private {
+        if (_amount != 0) {
+            registry.safeTransferFrom(address(this), msg.sender, _type.id(_market), _amount, "");
         }
     }
 }

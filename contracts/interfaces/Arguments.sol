@@ -32,4 +32,15 @@ interface Arguments {
         uint256 deadline;
         bytes userData;
     }
+
+    /// @param (to, deadline, userData) see {Mint}
+    struct AddLiquidity {
+        uint256 amountEth;
+        uint256 minLiquidity;
+        uint256 maxBull;
+        uint256 maxBear;
+        address to;
+        uint256 deadline;
+        bytes userData;
+    }
 }

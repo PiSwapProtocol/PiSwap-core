@@ -55,7 +55,7 @@ describe('Market', async () => {
 
       expect(await p.registry.balanceOf(accounts[0].address, tokenIdBull)).to.equal(amountOut);
       expect(await p.registry.balanceOf(accounts[0].address, tokenIdBear)).to.equal(amountOut);
-      expect(await market.depositedEth1()).to.equal(amountIn.sub(fee));
+      expect(await market.depositedEth()).to.equal(amountIn.sub(fee));
       expect(await p.registry.totalSupply(tokenIdBull)).to.equal(amountOut);
       expect(await p.registry.totalSupply(tokenIdBear)).to.equal(await p.registry.totalSupply(tokenIdBull));
     });

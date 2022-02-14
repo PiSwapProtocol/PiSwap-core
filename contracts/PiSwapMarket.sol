@@ -20,12 +20,10 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     address public NFTtokenAddress;
     uint256 public NFTtokenId;
     NFTType public nftType;
-    uint256 public ethReserve;
+    uint256 private _ethReserve;
 
-    uint256 public depositedEth;
     uint256 public constant MAX_SUPPLY = 1000000 ether;
 
-    event LiquidityAdded(address indexed sender, uint256 amountEth, uint256 amountBull, uint256 amountBear);
     event LiquidityRemoved(address indexed sender, uint256 amountEth, uint256 amountBull, uint256 amountBear);
     event SwapTokenPurchase(address indexed sender, TokenType indexed tokenType, uint256 amountIn, uint256 amountOut);
     event SwapTokenSell(address indexed sender, TokenType indexed tokenType, uint256 amountIn, uint256 amountOut);
@@ -52,7 +50,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     }
 
     /// @notice see {IPiSwapMarket-mint}
-    function mint(Arguments.Mint calldata args) external ensure(args.deadline, "mint") returns (uint256 amountIn, uint256 amountOut) {
+    function mint(Arguments.Mint calldata args) external ensure(args.deadline, "mint") nonReentrant returns (uint256 amountIn, uint256 amountOut) {
         require(args.amount != 0, _errMsg("mint", "AMOUNT_ZERO"));
         uint256 fee;
 
@@ -69,7 +67,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
             require(amountIn <= args.slippage, _errMsg("mint", "SLIPPAGE"));
         }
 
-        registry.safeTransferFrom(_msgSender(), address(this), 0, amountIn, "");
+        registry.safeTransferFrom(_msgSender(), address(this), TokenType.ETH.id(), amountIn, "");
         if (fee != 0) registry.safeTransferFrom(address(this), registry.beneficiary(), 0, fee, "");
         registry.mint(args.to, amountOut, TokenType.BULL);
         registry.mint(args.to, amountOut, TokenType.BEAR);
@@ -77,7 +75,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     }
 
     /// @notice see {IPiSwapMarket-burn}
-    function burn(Arguments.Burn calldata args) external ensure(args.deadline, "burn") returns (uint256 amountIn, uint256 amountOut) {
+    function burn(Arguments.Burn calldata args) external ensure(args.deadline, "burn") nonReentrant returns (uint256 amountIn, uint256 amountOut) {
         require(args.amount != 0, _errMsg("burn", "AMOUNT_ZERO"));
         uint256 fee;
 
@@ -97,50 +95,48 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
 
         registry.burn(_msgSender(), amountIn, TokenType.BULL);
         registry.burn(_msgSender(), amountIn, TokenType.BEAR);
-        if (fee != 0) registry.safeTransferFrom(address(this), registry.beneficiary(), 0, fee, "");
+        if (fee != 0) registry.safeTransferFrom(address(this), registry.beneficiary(), TokenType.ETH.id(), fee, "");
         registry.safeTransferFrom(address(this), args.to, 0, amountOut, "");
         emit Burned(_msgSender(), args.to, amountIn, amountOut);
     }
 
-    /// @notice add liquidity to pool, initial liquidity provider sets ratio
-    /// @param _deadline      time after which the transaction should not be executed anymore
-    /// @param _minLiquidity  minimum amount of liquidity tokens to be minted
-    /// @param _maxBullTokens maximum amount of bull tokens to deposit
-    /// @param _maxBearTokens maximum amount of bear tokens to deposit
-    /// @return               liquidity minted
-    function addLiquidity(
-        uint256 _minLiquidity,
-        uint256 _maxBullTokens,
-        uint256 _maxBearTokens,
-        uint256 _deadline
-    ) public payable nonReentrant returns (uint256) {
-        uint256 bullId = getTokenId(TokenType.BULL);
-        uint256 bearId = getTokenId(TokenType.BEAR);
-        uint256 liquiditySupply = registry.totalSupply(getTokenId(TokenType.LIQUIDITY));
+    /// @notice see {IPiSwapMarket-addLiquidity}
+    function addLiquidity(Arguments.AddLiquidity calldata args)
+        external
+        ensure(args.deadline, "addLiquidity")
+        nonReentrant
+        returns (
+            uint256 liquidityMinted,
+            uint256 amountBull,
+            uint256 amountBear
+        )
+    {
+        uint256 liquiditySupply = registry.totalSupply(TokenType.LIQUIDITY.id());
         if (liquiditySupply > 0) {
-            uint256 bullReserve = registry.balanceOf(address(this), bullId);
-            uint256 bearReserve = registry.balanceOf(address(this), bearId);
-            uint256 totalTokenReserve = bullReserve + bearReserve;
-            uint256 totalTokenAmount = (totalTokenReserve * msg.value) / ethReserve;
-            uint256 bullTokenAmount = (totalTokenAmount * bullReserve) / totalTokenReserve;
-            uint256 bearTokenAmount = totalTokenAmount - bullTokenAmount;
-            uint256 liquidityMinted = (msg.value * liquiditySupply) / ethReserve;
-            require(liquidityMinted >= _minLiquidity && _maxBullTokens >= bullTokenAmount && _maxBearTokens >= bearTokenAmount, "Slippage");
-            ethReserve += msg.value;
-            registry.mint(_msgSender(), liquidityMinted, TokenType.LIQUIDITY);
-            registry.safeTransferFrom(_msgSender(), address(this), bullId, bullTokenAmount, "");
-            registry.safeTransferFrom(_msgSender(), address(this), bearId, bearTokenAmount, "");
-            emit LiquidityAdded(_msgSender(), msg.value, bullTokenAmount, bearTokenAmount);
-            return liquidityMinted;
+            uint256 bullReserve = getReserve(TokenType.BULL);
+            uint256 ethReserve = getReserve(TokenType.ETH);
+            uint256 totalTokenReserve = bullReserve + getReserve(TokenType.BEAR);
+            uint256 totalTokenAmount = (totalTokenReserve * args.amountEth) / ethReserve;
+            amountBull = (totalTokenAmount * bullReserve) / totalTokenReserve;
+            amountBear = totalTokenAmount - amountBull;
+            liquidityMinted = (args.amountEth * liquiditySupply) / ethReserve;
+            require(liquidityMinted >= args.minLiquidity && args.maxBull >= amountBull && args.maxBear >= amountBear, _errMsg("addLiquidity", "SLIPPAGE"));
+            registry.safeTransferFrom(_msgSender(), address(this), TokenType.ETH.id(), args.amountEth, "");
+            registry.safeTransferFrom(_msgSender(), address(this), TokenType.BULL.id(), amountBull, "");
+            registry.safeTransferFrom(_msgSender(), address(this), TokenType.BEAR.id(), amountBear, "");
+            registry.mint(args.to, liquidityMinted, TokenType.LIQUIDITY);
+            emit LiquidityAdded(_msgSender(), args.to, liquidityMinted, args.amountEth, amountBull, amountBear);
         } else {
             // initialize pool
-            require(msg.value > 0 && _maxBullTokens > 0 && _maxBearTokens > 0);
-            ethReserve += msg.value;
-            registry.mint(_msgSender(), msg.value, TokenType.LIQUIDITY);
-            registry.safeTransferFrom(_msgSender(), address(this), bullId, _maxBullTokens, "");
-            registry.safeTransferFrom(_msgSender(), address(this), bearId, _maxBearTokens, "");
-            emit LiquidityAdded(_msgSender(), msg.value, _maxBullTokens, _maxBearTokens);
-            return msg.value;
+            liquidityMinted = args.amountEth;
+            amountBull = args.maxBull;
+            amountBear = args.maxBear;
+            require(args.amountEth != 0 && amountBull != 0 && amountBear != 0, _errMsg("addLiquidity", "INSUFFICIENT_AMOUNT"));
+            registry.safeTransferFrom(_msgSender(), address(this), TokenType.ETH.id(), args.amountEth, "");
+            registry.safeTransferFrom(_msgSender(), address(this), TokenType.BULL.id(), args.maxBull, "");
+            registry.safeTransferFrom(_msgSender(), address(this), TokenType.BEAR.id(), args.maxBear, "");
+            registry.mint(args.to, liquidityMinted, TokenType.LIQUIDITY);
+            emit LiquidityAdded(_msgSender(), args.to, liquidityMinted, args.amountEth, args.maxBull, args.maxBear);
         }
     }
 
@@ -170,11 +166,11 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     {
         // cannot use modifier here, stack too deep
         require(block.timestamp < _deadline, "expired");
-        uint256 liquiditySupply = registry.totalSupply(getTokenId(TokenType.LIQUIDITY));
+        uint256 liquiditySupply = registry.totalSupply(TokenType.LIQUIDITY.id());
         require(liquiditySupply > 0);
         (uint256 bullId, uint256 bearId, uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
 
-        amountEth = (ethReserve * _amount) / liquiditySupply;
+        amountEth = (_ethReserve * _amount) / liquiditySupply;
         amountBull = (bullReserve * _amount) / liquiditySupply;
         amountBear = (bearReserve * _amount) / liquiditySupply;
         require(amountEth >= _minEth && amountBull >= _minBull && amountBear >= _minBear, "Slippage");
@@ -182,7 +178,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         registry.burn(_msgSender(), _amount, TokenType.LIQUIDITY);
         registry.safeTransferFrom(address(this), _msgSender(), bullId, amountBull, "");
         registry.safeTransferFrom(address(this), _msgSender(), bearId, amountBear, "");
-        ethReserve -= amountEth;
+        _ethReserve -= amountEth;
         _safeTransfer(_msgSender(), amountEth);
         emit LiquidityRemoved(_msgSender(), amountEth, amountBull, amountBear);
     }
@@ -201,14 +197,14 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         require(_tokenType != TokenType.LIQUIDITY, "Cannot swap liquidity token");
 
         (uint256 bullId, uint256 bearId, uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
-        require(ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
+        require(_ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
 
-        uint256 tokenEthReserve = (ethReserve * (_tokenType == TokenType.BULL ? bearReserve : bullReserve)) / (bullReserve + bearReserve);
+        uint256 tokenEthReserve = (_ethReserve * (_tokenType == TokenType.BULL ? bearReserve : bullReserve)) / (bullReserve + bearReserve);
         tokensOut = _getPrice(msg.value, tokenEthReserve, _tokenType == TokenType.BULL ? bullReserve : bearReserve);
         require(tokensOut >= _minTokens, "Slippage");
 
         registry.safeTransferFrom(address(this), _msgSender(), _tokenType == TokenType.BULL ? bullId : bearId, tokensOut, "");
-        ethReserve += msg.value;
+        _ethReserve += msg.value;
         emit SwapTokenPurchase(_msgSender(), _tokenType, msg.value, tokensOut);
     }
 
@@ -228,14 +224,14 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         require(_tokenType != TokenType.LIQUIDITY, "Cannot swap liquidity token");
 
         (uint256 bullId, uint256 bearId, uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
-        require(ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
+        require(_ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
 
-        uint256 tokenEthReserve = (ethReserve * (_tokenType == TokenType.BULL ? bearReserve : bullReserve)) / (bullReserve + bearReserve);
+        uint256 tokenEthReserve = (_ethReserve * (_tokenType == TokenType.BULL ? bearReserve : bullReserve)) / (bullReserve + bearReserve);
         ethOut = _getPrice(_amount, _tokenType == TokenType.BULL ? bullReserve : bearReserve, tokenEthReserve);
         require(ethOut >= _minEth, "Slippage");
 
         registry.safeTransferFrom(_msgSender(), address(this), _tokenType == TokenType.BULL ? bullId : bearId, _amount, "");
-        ethReserve -= ethOut;
+        _ethReserve -= ethOut;
         _safeTransfer(_msgSender(), ethOut);
         emit SwapTokenSell(_msgSender(), _tokenType, _amount, ethOut);
     }
@@ -272,7 +268,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         uint256 _amount
     ) public nonReentrant {
         (, , uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
-        require(ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
+        require(_ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
         uint256 nftValue = _NFTValue(bullReserve, bearReserve);
         if (nftType == NFTType.ERC721) {
             require(_NFTSwapEnabled(bullReserve, bearReserve, 1), "NFT swapping not enabled");
@@ -300,6 +296,13 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     function _safeTransfer(address _to, uint256 _amount) private {
         (bool success, ) = _to.call{value: _amount}("");
         require(success, "Transfer failed");
+    }
+
+    function getReserve(TokenType _tokenType) public view returns (uint256 reserve) {
+        reserve = registry.balanceOf(address(this), _tokenType.id());
+        if (_tokenType.isEth()) {
+            reserve -= depositedEth();
+        }
     }
 
     /// @notice calculates the value of the NFT based on the token reserves
@@ -338,10 +341,10 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         uint256 _bearReserve,
         uint256 _amount
     ) private view returns (bool) {
-        if (ethReserve > 0 && _bullReserve > 0 && _bearReserve > 0) {
+        if (_ethReserve > 0 && _bullReserve > 0 && _bearReserve > 0) {
             uint256 nftValue = (_bearReserve * 1 ether) / _bullReserve;
             uint256 priceImpact = 10 ether;
-            uint256 liquidityPool = address(this).balance - ethReserve;
+            uint256 liquidityPool = address(this).balance - getReserve(TokenType.ETH);
             uint256 minLiquidity = (nftValue * priceImpact) / 1 ether;
             if (liquidityPool >= minLiquidity) {
                 // always true for ERC721
@@ -367,8 +370,8 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
             uint256 bearReserve
         )
     {
-        bullId = getTokenId(TokenType.BULL);
-        bearId = getTokenId(TokenType.BEAR);
+        bullId = TokenType.BULL.id();
+        bearId = TokenType.BEAR.id();
         bullReserve = registry.balanceOf(address(this), bullId);
         bearReserve = registry.balanceOf(address(this), bearId);
     }
@@ -382,9 +385,9 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
             uint256 bear
         )
     {
-        uint256 bullId = getTokenId(TokenType.BULL);
-        uint256 bearId = getTokenId(TokenType.BEAR);
-        eth = ethReserve;
+        uint256 bullId = TokenType.BULL.id();
+        uint256 bearId = TokenType.BEAR.id();
+        eth = _ethReserve;
         bull = registry.balanceOf(address(this), bullId);
         bear = registry.balanceOf(address(this), bearId);
     }
@@ -405,20 +408,13 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         return numerator / denominator;
     }
 
-    /// @notice gets token id
-    /// @param  _tokenType token type
-    /// @return            token id
-    function getTokenId(TokenType _tokenType) public view returns (uint256) {
-        return uint256(keccak256(abi.encodePacked(block.chainid, address(this), _tokenType)));
-    }
-
     // prettier-ignore
     /// @notice gets all token ids
     function getTokenIds() public view returns (uint256 bullId, uint256 bearId, uint256 liquidityId) {
         return (TokenType.BULL.id(), TokenType.BEAR.id(), TokenType.LIQUIDITY.id());
     }
 
-    function depositedEth1() public view returns (uint256) {
+    function depositedEth() public view returns (uint256) {
         uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
         return PiSwapLibrary.depositedEth(currentSupply);
     }
@@ -445,20 +441,6 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     function burnInGivenOut(uint256 _amountOut) public view returns (uint256 amountIn) {
         uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
         amountIn = PiSwapLibrary.burnInGivenOut(currentSupply, _amountOut);
-    }
-
-    /// @notice calculates whether the current market profit or loss
-    /// @return 18 decimal float of market profit loss: > 1 profit, < 1 loss
-    function marketProfit() public view returns (uint256) {
-        return _marketProfit(address(this).balance);
-    }
-
-    /// @dev private function to calculate the profit loss without msg.value for purchase of tokens
-    function _marketProfit(uint256 contractBalance) private view returns (uint256) {
-        if (depositedEth == 0) {
-            return 1 ether;
-        }
-        return ((contractBalance - ethReserve) * 1 ether) / (depositedEth);
     }
 
     function _errMsg(string memory _method, string memory _message) private pure returns (string memory) {

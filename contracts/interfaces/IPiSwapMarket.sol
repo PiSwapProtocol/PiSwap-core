@@ -12,6 +12,7 @@ interface IRegistry is IPiSwapRegistry, IERC1155 {
 interface IPiSwapMarket is Arguments {
     event Minted(address indexed sender, address indexed to, uint256 amountIn, uint256 amountOut);
     event Burned(address indexed sender, address indexed to, uint256 amountIn, uint256 amountOut);
+    event LiquidityAdded(address indexed sender, address indexed to, uint256 liquidityMinted, uint256 amountEth, uint256 amountBull, uint256 amountBear);
 
     /// @notice mint bull and bear tokens
     /// @param args see {Arguments-Mint}
@@ -24,6 +25,17 @@ interface IPiSwapMarket is Arguments {
     /// @return amountIn amount of Bull and Bear tokens burned
     /// @return amountOut amount of ETH out
     function burn(Arguments.Burn calldata args) external returns (uint256 amountIn, uint256 amountOut);
+
+    /// @notice add liquidity to liquidity pool
+    /// @param args see {Arguments-AddLiquidity}
+    /// @return liquidityMinted amount of liquidity tokens minted
+    function addLiquidity(Arguments.AddLiquidity calldata args)
+        external
+        returns (
+            uint256 liquidityMinted,
+            uint256 amountBull,
+            uint256 amountBear
+        );
 
     /// @notice see {PiSwapLibrary-mintOutGivenIn}
     function mintOutGivenIn(uint256 _amountIn) external view returns (uint256 amountOut);
@@ -38,13 +50,6 @@ interface IPiSwapMarket is Arguments {
     function burnInGivenOut(uint256 _amountOut) external view returns (uint256 amountIn);
 
     //////////////////////////////////////////
-
-    function addLiquidity(
-        uint256 _minLiquidity,
-        uint256 _maxBullTokens,
-        uint256 _maxBearTokens,
-        uint256 _deadline
-    ) external payable returns (uint256);
 
     function removeLiquidity(
         uint256 _amount,
@@ -93,8 +98,6 @@ interface IPiSwapMarket is Arguments {
             uint256 bull,
             uint256 bear
         );
-
-    function getTokenId(TokenType _tokenType) external view returns (uint256);
 }
 
 interface IERC721_ {

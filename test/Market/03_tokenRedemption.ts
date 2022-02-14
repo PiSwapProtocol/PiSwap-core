@@ -84,7 +84,7 @@ describe('Market', async () => {
       await expect(market.burnOutGivenIn(supply.add(1))).to.be.revertedWith(
         'PiSwapLibrary#burnOutGivenIn: AMOUNT_EXCEEDS_SUPPLY'
       );
-      const depositedEth = await market.depositedEth1();
+      const depositedEth = await market.depositedEth();
       await expect(market.burnInGivenOut(depositedEth.add(1))).to.be.revertedWith(
         'PiSwapLibrary#burnInGivenOut: AMOUNT_EXCEEDS_SUPPLY'
       );

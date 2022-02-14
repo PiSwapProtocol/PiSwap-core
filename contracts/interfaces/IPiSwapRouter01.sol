@@ -12,6 +12,7 @@ import "hardhat/console.sol";
 interface IPiSwapRouter01 {
     event Minted(address indexed market, address indexed sender, uint256 amountIn, uint256 amountOut);
     event Burned(address indexed market, address indexed sender, uint256 amountIn, uint256 amountOut);
+    event LiquidityAdded(address indexed market, address indexed sender, uint256 liquidityMinted);
 
     function mint(
         address market,
@@ -20,4 +21,16 @@ interface IPiSwapRouter01 {
     ) external returns (uint256 amountIn, uint256 amountOut);
 
     function burn(address market, Arguments.Burn calldata args) external returns (uint256 amountIn, uint256 amountOut);
+
+    function addLiquidity(
+        address market,
+        Arguments.AddLiquidity calldata args,
+        bool deposit
+    )
+        external
+        returns (
+            uint256 liquidityMinted,
+            uint256 amountBull,
+            uint256 amountBear
+        );
 }
