@@ -26,13 +26,8 @@ export class PiSwap {
   private async init(owner: string, implementation?: string): Promise<void> {
     this.weth = (await (await ethers.getContractFactory('WETH9')).deploy()) as WETH9;
     this.chainId = await (await ethers.provider.getNetwork()).chainId;
-    // if (!owner) {
-    //   this.owner = (await deployProxy()).address;
-    //   this.beneficiary = this.owner;
-    // } else {
     this.owner = owner;
     this.beneficiary = owner;
-    // }
     if (!implementation) {
       this.implementation = (await (await ethers.getContractFactory('PiSwapMarket')).deploy()).address;
     } else {
@@ -247,6 +242,18 @@ export class PiSwap {
     const { reserveIn, reserveOut } = await this.getSwapReserves(market, tokenIn, tokenOut);
     const amountInWithoutFee = reserveIn.mul(amountOut).div(reserveOut.sub(amountOut));
     return amountInWithoutFee.mul(reserveIn).div(reserveIn.sub(amountInWithoutFee));
+  }
+
+  public async mintedLiquidity(
+    market: PiSwapMarket,
+    nonTradedToken: number,
+    reserveBefore: BigNumber,
+    liquiditySupplyBefore: BigNumber
+  ): Promise<BigNumber> {
+    const { reserveIn } = await this.getSwapReserves(market, 0, nonTradedToken);
+    const adjustedReserve = reserveBefore.add(reserveIn.sub(reserveBefore).div(2));
+    const impact = reserveIn.mul(ethers.utils.parseEther('1')).div(adjustedReserve).sub(ethers.utils.parseEther('1'));
+    return liquiditySupplyBefore.mul(impact).div(ethers.utils.parseEther('1'));
   }
 }
 

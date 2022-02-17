@@ -73,7 +73,7 @@ describe('Market', async () => {
       await p.router.addLiquidity(
         market.address,
         {
-          amountEth: ethers.utils.parseEther('2'),
+          amountEth: ethers.utils.parseEther('4'),
           minLiquidity: 0,
           maxBull: ethers.utils.parseEther('5000'),
           maxBear: ethers.utils.parseEther('5000'),
@@ -312,6 +312,54 @@ describe('Market', async () => {
           .to.emit(p.router, 'Swapped')
           .withArgs(market.address, accounts[0].address, c.tokenType.BEAR, c.tokenType.ETH, amountIn, amountOut);
       });
+      it('should be able to swap bull tokens for bear tokens', async () => {
+        const amountIn = ethers.utils.parseEther('100');
+        const amountOut = await p.swapOutGivenIn(market, amountIn, c.tokenType.BULL, c.tokenType.BEAR);
+        const tx = p.router.swap(
+          market.address,
+          {
+            amount: amountIn,
+            tokenIn: c.tokenType.BULL,
+            tokenOut: c.tokenType.BEAR,
+            kind: c.swapKind.GIVEN_IN,
+            to: accounts[0].address,
+            slippage: amountOut,
+            deadline: c.unix2100,
+            userData: [],
+          },
+          true
+        );
+        await expect(tx)
+          .to.emit(market, 'Swapped')
+          .withArgs(p.router.address, accounts[0].address, c.tokenType.BULL, c.tokenType.BEAR, amountIn, amountOut);
+        await expect(tx)
+          .to.emit(p.router, 'Swapped')
+          .withArgs(market.address, accounts[0].address, c.tokenType.BULL, c.tokenType.BEAR, amountIn, amountOut);
+      });
+      it('should be able to swap bear tokens for bull tokens', async () => {
+        const amountIn = ethers.utils.parseEther('100');
+        const amountOut = await p.swapOutGivenIn(market, amountIn, c.tokenType.BEAR, c.tokenType.BULL);
+        const tx = p.router.swap(
+          market.address,
+          {
+            amount: amountIn,
+            tokenIn: c.tokenType.BEAR,
+            tokenOut: c.tokenType.BULL,
+            kind: c.swapKind.GIVEN_IN,
+            to: accounts[0].address,
+            slippage: amountOut,
+            deadline: c.unix2100,
+            userData: [],
+          },
+          true
+        );
+        await expect(tx)
+          .to.emit(market, 'Swapped')
+          .withArgs(p.router.address, accounts[0].address, c.tokenType.BEAR, c.tokenType.BULL, amountIn, amountOut);
+        await expect(tx)
+          .to.emit(p.router, 'Swapped')
+          .withArgs(market.address, accounts[0].address, c.tokenType.BEAR, c.tokenType.BULL, amountIn, amountOut);
+      });
     });
 
     describe('Swap in given out', () => {
@@ -453,6 +501,56 @@ describe('Market', async () => {
         await expect(tx)
           .to.emit(p.router, 'Swapped')
           .withArgs(market.address, accounts[0].address, c.tokenType.BEAR, c.tokenType.ETH, amountIn, amountOut);
+      });
+
+      it('should be able to swap bull tokens for bear tokens', async () => {
+        const amountOut = ethers.utils.parseEther('100');
+        const amountIn = await p.swapInGivenOut(market, amountOut, c.tokenType.BULL, c.tokenType.BEAR);
+        const tx = p.router.swap(
+          market.address,
+          {
+            amount: amountOut,
+            tokenIn: c.tokenType.BULL,
+            tokenOut: c.tokenType.BEAR,
+            kind: c.swapKind.GIVEN_OUT,
+            to: accounts[0].address,
+            slippage: amountIn,
+            deadline: c.unix2100,
+            userData: [],
+          },
+          true
+        );
+        await expect(tx)
+          .to.emit(market, 'Swapped')
+          .withArgs(p.router.address, accounts[0].address, c.tokenType.BULL, c.tokenType.BEAR, amountIn, amountOut);
+        await expect(tx)
+          .to.emit(p.router, 'Swapped')
+          .withArgs(market.address, accounts[0].address, c.tokenType.BULL, c.tokenType.BEAR, amountIn, amountOut);
+      });
+
+      it('should be able to swap bear tokens for bull tokens', async () => {
+        const amountOut = ethers.utils.parseEther('100');
+        const amountIn = await p.swapInGivenOut(market, amountOut, c.tokenType.BEAR, c.tokenType.BULL);
+        const tx = p.router.swap(
+          market.address,
+          {
+            amount: amountOut,
+            tokenIn: c.tokenType.BEAR,
+            tokenOut: c.tokenType.BULL,
+            kind: c.swapKind.GIVEN_OUT,
+            to: accounts[0].address,
+            slippage: amountIn,
+            deadline: c.unix2100,
+            userData: [],
+          },
+          true
+        );
+        await expect(tx)
+          .to.emit(market, 'Swapped')
+          .withArgs(p.router.address, accounts[0].address, c.tokenType.BEAR, c.tokenType.BULL, amountIn, amountOut);
+        await expect(tx)
+          .to.emit(p.router, 'Swapped')
+          .withArgs(market.address, accounts[0].address, c.tokenType.BEAR, c.tokenType.BULL, amountIn, amountOut);
       });
     });
   });

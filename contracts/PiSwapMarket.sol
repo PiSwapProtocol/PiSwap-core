@@ -34,6 +34,27 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         _;
     }
 
+    /// @notice on every ETH / Token swap lock half of the fee
+    modifier lockLiquidity(TokenType _tokenIn, TokenType _tokenOut) {
+        require(_tokenIn != TokenType.LIQUIDITY && _tokenOut != TokenType.LIQUIDITY, _errMsg("swap", "LIQUIDITY_TOKEN_SWAP"));
+        require(_tokenIn != _tokenOut, _errMsg("swap", "EQUAL_TOKEN_IN_OUT"));
+        // sort tokens and check if ETH is traded, invert BULL/BEAR to track added liquidity
+        (TokenType ethToken, TokenType nonTradedToken) = _tokenIn < _tokenOut ? (_tokenIn, _tokenOut.invert()) : (_tokenOut, _tokenIn.invert());
+        if (ethToken.isEth()) {
+            (uint256 reserveBefore, ) = _getSwapReserves(ethToken, nonTradedToken);
+            _;
+            (uint256 reserveAfter, ) = _getSwapReserves(ethToken, nonTradedToken);
+            assert(reserveAfter >= reserveBefore);
+            // half of the liquidity added through the fee is minted to the protocol
+            uint256 adjustedReserve = reserveBefore + (reserveAfter - reserveBefore) / 2;
+            uint256 impact = (reserveAfter * 1 ether) / adjustedReserve - 1 ether;
+            uint256 liquidityMinted = (registry.totalSupply(TokenType.LIQUIDITY.id()) * impact) / 1 ether;
+            registry.mint(address(this), liquidityMinted, TokenType.LIQUIDITY);
+        } else {
+            _;
+        }
+    }
+
     function initialize(
         address _tokenAddress,
         uint256 _tokenId,
@@ -166,10 +187,14 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     }
 
     /// @notice see {IPiSwapMarket-swap}
-    function swap(Arguments.Swap calldata args) external ensure(args.deadline, "swap") nonReentrant returns (uint256 amountIn, uint256 amountOut) {
-        require(args.tokenIn != TokenType.LIQUIDITY && args.tokenOut != TokenType.LIQUIDITY, _errMsg("swap", "LIQUIDITY_TOKEN_SWAP"));
+    function swap(Arguments.Swap calldata args)
+        external
+        ensure(args.deadline, "swap")
+        lockLiquidity(args.tokenIn, args.tokenOut)
+        nonReentrant
+        returns (uint256 amountIn, uint256 amountOut)
+    {
         require(args.amount != 0, _errMsg("swap", "AMOUNT_ZERO"));
-        require(args.tokenIn != args.tokenOut, _errMsg("swap", "EQUAL_TOKEN_IN_OUT"));
         if (args.kind.givenIn()) {
             amountIn = args.amount;
             amountOut = swapOutGivenIn(amountIn, args.tokenIn, args.tokenOut);

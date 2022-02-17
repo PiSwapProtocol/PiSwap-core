@@ -90,19 +90,6 @@ interface IPiSwapMarket is Arguments {
 
     //////////////////////////////////////////
 
-    function swapEthToToken(
-        TokenType _tokenType,
-        uint256 _minTokens,
-        uint256 _deadline
-    ) external payable returns (uint256 tokensOut);
-
-    function swapTokenToEth(
-        TokenType _tokenType,
-        uint256 _amount,
-        uint256 _minEth,
-        uint256 _deadline
-    ) external returns (uint256 ethOut);
-
     function buyNFT(uint256 _deadline, uint256 _amount) external payable;
 
     function sellNFT(
@@ -114,15 +101,6 @@ interface IPiSwapMarket is Arguments {
     function NFTValue() external view returns (uint256);
 
     function NFTSwapEnabled() external view returns (bool);
-
-    function getReserves()
-        external
-        view
-        returns (
-            uint256 eth,
-            uint256 bull,
-            uint256 bear
-        );
 }
 
 interface IERC721_ {
