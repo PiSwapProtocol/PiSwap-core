@@ -14,6 +14,7 @@ interface IPiSwapMarket is Arguments {
     event Burned(address indexed sender, address indexed to, uint256 amountIn, uint256 amountOut);
     event LiquidityAdded(address indexed sender, address indexed to, uint256 liquidityMinted, uint256 amountEth, uint256 amountBull, uint256 amountBear);
     event LiquidityRemoved(address indexed sender, address indexed to, uint256 liquidityBurned, uint256 amountEth, uint256 amountBull, uint256 amountBear);
+    event Swapped(address indexed sender, address indexed to, TokenType tokenIn, TokenType tokenOut, uint256 amountIn, uint256 amountOut);
 
     /// @notice mint bull and bear tokens
     /// @param args see {Arguments-Mint}
@@ -53,6 +54,12 @@ interface IPiSwapMarket is Arguments {
             uint256 amountBear
         );
 
+    /// @notice swap tokens
+    /// @param args see {Arguments-Swap}
+    /// @return amountIn amount of tokens in
+    /// @return amountOut amount of tokens out
+    function swap(Arguments.Swap calldata args) external returns (uint256 amountIn, uint256 amountOut);
+
     /// @notice see {PiSwapLibrary-mintOutGivenIn}
     function mintOutGivenIn(uint256 _amountIn) external view returns (uint256 amountOut);
 
@@ -64,6 +71,22 @@ interface IPiSwapMarket is Arguments {
 
     /// @notice see {PiSwapLibrary-burnInGivenOut}
     function burnInGivenOut(uint256 _amountOut) external view returns (uint256 amountIn);
+
+    /// @notice calculate amount out with fee for an amount in
+    /// @notice see {PiSwapLibrary-swapOutGivenIn}
+    function swapOutGivenIn(
+        uint256 _amountIn,
+        TokenType _tokenIn,
+        TokenType _tokenOut
+    ) external view returns (uint256 amountOut);
+
+    /// @notice calculate amount in with fee for an amount out
+    /// @notice see {PiSwapLibrary-swapInGivenOut}
+    function swapInGivenOut(
+        uint256 _amountOut,
+        TokenType _tokenIn,
+        TokenType _tokenOut
+    ) external view returns (uint256 amountIn);
 
     //////////////////////////////////////////
 

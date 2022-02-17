@@ -81,12 +81,10 @@ describe('Market', async () => {
 
     it('should fail when burning a larger amount than the total supply', async () => {
       const supply = await p.registry.balanceOf(accounts[0].address, p.getTokenId(market, 1));
-      await expect(market.burnOutGivenIn(supply.add(1))).to.be.revertedWith(
-        'PiSwapLibrary#burnOutGivenIn: AMOUNT_EXCEEDS_SUPPLY'
-      );
+      await expect(market.burnOutGivenIn(supply.add(1))).to.be.revertedWith('PiSwapMarket#burn: AMOUNT_EXCEEDS_SUPPLY');
       const depositedEth = await market.depositedEth();
       await expect(market.burnInGivenOut(depositedEth.add(1))).to.be.revertedWith(
-        'PiSwapLibrary#burnInGivenOut: AMOUNT_EXCEEDS_SUPPLY'
+        'PiSwapMarket#burn: AMOUNT_EXCEEDS_SUPPLY'
       );
     });
 

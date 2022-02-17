@@ -119,6 +119,31 @@ export class PiSwap {
     return this.maxSupply.sub(numerator.div(denominator).add('1'));
   }
 
+  public async getReserve(market: PiSwapMarket, tokenType: number): Promise<BigNumber> {
+    let reserve = await this.registry.balanceOf(market.address, this.getTokenId(market, tokenType));
+    if (tokenType === 0) {
+      reserve = reserve.sub(await market.depositedEth());
+    }
+    return reserve;
+  }
+
+  public async getSwapReserves(
+    market: PiSwapMarket,
+    tokenIn: number,
+    tokenOut: number
+  ): Promise<{ reserveIn: BigNumber; reserveOut: BigNumber }> {
+    let reserveIn = await this.getReserve(market, tokenIn);
+    let reserveOut = await this.getReserve(market, tokenOut);
+    if (tokenIn === 0) {
+      const otherReserve = await this.getReserve(market, tokenOut === 1 ? 2 : 1);
+      reserveIn = reserveIn.mul(otherReserve).div(reserveOut.add(otherReserve));
+    } else if (tokenOut === 0) {
+      const otherReserve = await this.getReserve(market, tokenIn === 1 ? 2 : 1);
+      reserveOut = reserveOut.mul(otherReserve).div(reserveIn.add(otherReserve));
+    }
+    return { reserveIn, reserveOut };
+  }
+
   public async mintOutGivenInWithFee(
     market: PiSwapMarket,
     amountIn: BigNumber
@@ -200,6 +225,28 @@ export class PiSwap {
       .add(amountOut.mul(totalSupply))
       .sub(this.maxSupply.mul(amountOut));
     return numerator.div(denominator).add('1');
+  }
+
+  public async swapOutGivenIn(
+    market: PiSwapMarket,
+    amountIn: BigNumber,
+    tokenIn: number,
+    tokenOut: number
+  ): Promise<BigNumber> {
+    const { reserveIn, reserveOut } = await this.getSwapReserves(market, tokenIn, tokenOut);
+    const amountInWithFee = amountIn.mul(reserveIn).div(amountIn.add(reserveIn));
+    return reserveOut.mul(amountInWithFee).div(reserveIn.add(amountInWithFee));
+  }
+
+  public async swapInGivenOut(
+    market: PiSwapMarket,
+    amountOut: BigNumber,
+    tokenIn: number,
+    tokenOut: number
+  ): Promise<BigNumber> {
+    const { reserveIn, reserveOut } = await this.getSwapReserves(market, tokenIn, tokenOut);
+    const amountInWithoutFee = reserveIn.mul(amountOut).div(reserveOut.sub(amountOut));
+    return amountInWithoutFee.mul(reserveIn).div(reserveIn.sub(amountInWithoutFee));
   }
 }
 

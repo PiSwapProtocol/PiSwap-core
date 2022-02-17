@@ -22,8 +22,7 @@ interface Arguments {
 
     /// @notice arguments for burning tokens
     /// @param amount amount of tokens in/out depending on SwapKind
-    /// @param swapKind see {Types-SwapKind}
-    /// @param (to, slippage, deadline, userData) see {Mint}
+    /// @param (kind, to, slippage, deadline, userData) see {Mint}
     struct Burn {
         uint256 amount;
         SwapKind kind;
@@ -60,6 +59,20 @@ interface Arguments {
         uint256 minEth;
         uint256 minBull;
         uint256 minBear;
+        address to;
+        uint256 deadline;
+        bytes userData;
+    }
+
+    /// @param tokenIn token type in
+    /// @param tokenOut token type out
+    /// @param (kind, amount, to, slippage, deadline, userData) see {Mint}
+    struct Swap {
+        uint256 amount;
+        TokenType tokenIn;
+        TokenType tokenOut;
+        SwapKind kind;
+        uint256 slippage;
         address to;
         uint256 deadline;
         bytes userData;

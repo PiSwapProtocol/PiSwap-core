@@ -10,16 +10,12 @@ describe('Market', async () => {
   let accounts: SignerWithAddress[];
   let p: PiSwap;
   let market: PiSwapMarket;
-  let bullTokenId: BigNumber;
-  let bearTokenId: BigNumber;
   let LiquidityTokenId: BigNumber;
 
   before(async () => {
     accounts = await ethers.getSigners();
     p = await PiSwap.create(accounts[8].address);
     market = await p.deplyoMarketERC721();
-    bullTokenId = p.getTokenId(market, c.tokenType.BULL);
-    bearTokenId = p.getTokenId(market, c.tokenType.BEAR);
     LiquidityTokenId = p.getTokenId(market, c.tokenType.LIQUIDITY);
 
     await p.weth.deposit({ value: ethers.utils.parseEther('10') });

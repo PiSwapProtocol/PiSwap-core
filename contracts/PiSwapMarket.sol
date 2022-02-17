@@ -165,57 +165,23 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         emit LiquidityRemoved(_msgSender(), args.to, args.amountLiquidity, amountEth, amountBull, amountBear);
     }
 
-    /// @notice swaps ETH to token
-    /// @param _tokenType specifies which token to swap
-    /// @param _minTokens minimum desired amount of tokens to receive
-    /// @param _deadline  time after which the transaction should not be executed anymore
-    /// @return tokensOut amount of tokens received
-    function swapEthToToken(
-        TokenType _tokenType,
-        uint256 _minTokens,
-        uint256 _deadline
-    ) public payable nonReentrant returns (uint256 tokensOut) {
-        require(msg.value > 0);
-        require(_tokenType != TokenType.LIQUIDITY, "Cannot swap liquidity token");
-
-        (uint256 bullId, uint256 bearId, uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
-        require(_ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
-
-        uint256 tokenEthReserve = (_ethReserve * (_tokenType == TokenType.BULL ? bearReserve : bullReserve)) / (bullReserve + bearReserve);
-        tokensOut = _getPrice(msg.value, tokenEthReserve, _tokenType == TokenType.BULL ? bullReserve : bearReserve);
-        require(tokensOut >= _minTokens, "Slippage");
-
-        registry.safeTransferFrom(address(this), _msgSender(), _tokenType == TokenType.BULL ? bullId : bearId, tokensOut, "");
-        _ethReserve += msg.value;
-        emit SwapTokenPurchase(_msgSender(), _tokenType, msg.value, tokensOut);
-    }
-
-    /// @notice swaps token to ETH
-    /// @param _tokenType specifies which token to swap
-    /// @param _amount    amount of tokens to swap
-    /// @param _minEth    minimum desired amount of ETH to receive
-    /// @param _deadline  time after which the transaction should not be executed anymore
-    /// @return ethOut    amount of ETH received
-    function swapTokenToEth(
-        TokenType _tokenType,
-        uint256 _amount,
-        uint256 _minEth,
-        uint256 _deadline
-    ) public nonReentrant returns (uint256 ethOut) {
-        require(_amount > 0);
-        require(_tokenType != TokenType.LIQUIDITY, "Cannot swap liquidity token");
-
-        (uint256 bullId, uint256 bearId, uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
-        require(_ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
-
-        uint256 tokenEthReserve = (_ethReserve * (_tokenType == TokenType.BULL ? bearReserve : bullReserve)) / (bullReserve + bearReserve);
-        ethOut = _getPrice(_amount, _tokenType == TokenType.BULL ? bullReserve : bearReserve, tokenEthReserve);
-        require(ethOut >= _minEth, "Slippage");
-
-        registry.safeTransferFrom(_msgSender(), address(this), _tokenType == TokenType.BULL ? bullId : bearId, _amount, "");
-        _ethReserve -= ethOut;
-        _safeTransfer(_msgSender(), ethOut);
-        emit SwapTokenSell(_msgSender(), _tokenType, _amount, ethOut);
+    /// @notice see {IPiSwapMarket-swap}
+    function swap(Arguments.Swap calldata args) external ensure(args.deadline, "swap") nonReentrant returns (uint256 amountIn, uint256 amountOut) {
+        require(args.tokenIn != TokenType.LIQUIDITY && args.tokenOut != TokenType.LIQUIDITY, _errMsg("swap", "LIQUIDITY_TOKEN_SWAP"));
+        require(args.amount != 0, _errMsg("swap", "AMOUNT_ZERO"));
+        require(args.tokenIn != args.tokenOut, _errMsg("swap", "EQUAL_TOKEN_IN_OUT"));
+        if (args.kind.givenIn()) {
+            amountIn = args.amount;
+            amountOut = swapOutGivenIn(amountIn, args.tokenIn, args.tokenOut);
+            require(amountOut >= args.slippage, _errMsg("swap", "SLIPPAGE"));
+        } else {
+            amountOut = args.amount;
+            amountIn = swapInGivenOut(amountOut, args.tokenIn, args.tokenOut);
+            require(amountIn <= args.slippage, _errMsg("swap", "SLIPPAGE"));
+        }
+        registry.safeTransferFrom(_msgSender(), address(this), args.tokenIn.id(), amountIn, "");
+        registry.safeTransferFrom(address(this), args.to, args.tokenOut.id(), amountOut, "");
+        emit Swapped(_msgSender(), args.to, args.tokenIn, args.tokenOut, amountIn, amountOut);
     }
 
     /// @notice swaps ETH for the NFT held by the contract
@@ -249,7 +215,8 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         uint256 _deadline,
         uint256 _amount
     ) public nonReentrant {
-        (, , uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
+        uint256 bullReserve = getReserve(TokenType.BULL);
+        uint256 bearReserve = getReserve(TokenType.BEAR);
         require(_ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
         uint256 nftValue = _NFTValue(bullReserve, bearReserve);
         if (nftType == NFTType.ERC721) {
@@ -280,17 +247,11 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         require(success, "Transfer failed");
     }
 
-    function getReserve(TokenType _tokenType) public view returns (uint256 reserve) {
-        reserve = registry.balanceOf(address(this), _tokenType.id());
-        if (_tokenType.isEth()) {
-            reserve -= depositedEth();
-        }
-    }
-
     /// @notice calculates the value of the NFT based on the token reserves
     /// @return value of the NFT in ETH
     function NFTValue() public view returns (uint256) {
-        (, , uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
+        uint256 bullReserve = getReserve(TokenType.BULL);
+        uint256 bearReserve = getReserve(TokenType.BEAR);
         return _NFTValue(bullReserve, bearReserve);
     }
 
@@ -307,7 +268,8 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     /// @dev    returns if at least 1 NFT can be swapped
     /// @return returns if swapping of NFTs is enabled
     function NFTSwapEnabled() public view returns (bool) {
-        (, , uint256 bullReserve, uint256 bearReserve) = _getTokenIdsReserves();
+        uint256 bullReserve = getReserve(TokenType.BULL);
+        uint256 bearReserve = getReserve(TokenType.BEAR);
         return _NFTSwapEnabled(bullReserve, bearReserve, 1);
     }
 
@@ -337,92 +299,81 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         return false;
     }
 
-    /// @notice returns token ids and reserves for bull and bear tokens
-    /// @return bullId      tokenId of bull token
-    /// @return bearId      tokenId of bear token
-    /// @return bullReserve reserve size of bull token
-    /// @return bearReserve reserve size of bear token
-    function _getTokenIdsReserves()
-        private
-        view
-        returns (
-            uint256 bullId,
-            uint256 bearId,
-            uint256 bullReserve,
-            uint256 bearReserve
-        )
-    {
-        bullId = TokenType.BULL.id();
-        bearId = TokenType.BEAR.id();
-        bullReserve = registry.balanceOf(address(this), bullId);
-        bearReserve = registry.balanceOf(address(this), bearId);
-    }
-
-    function getReserves()
-        public
-        view
-        returns (
-            uint256 eth,
-            uint256 bull,
-            uint256 bear
-        )
-    {
-        uint256 bullId = TokenType.BULL.id();
-        uint256 bearId = TokenType.BEAR.id();
-        eth = _ethReserve;
-        bull = registry.balanceOf(address(this), bullId);
-        bear = registry.balanceOf(address(this), bearId);
-    }
-
-    /// @notice calculates the output amount based on input amount and reserves
-    /// @param _amount        amount of input token
-    /// @param _inputReserve  reserve size of the input token
-    /// @param _outputReserve reserve size of the output token
-    /// @return               output amount
-    function _getPrice(
-        uint256 _amount,
-        uint256 _inputReserve,
-        uint256 _outputReserve
-    ) private pure returns (uint256) {
-        uint256 amountWithFee = _amount * 997;
-        uint256 numerator = amountWithFee * _outputReserve;
-        uint256 denominator = (_inputReserve * 1000) + amountWithFee;
-        return numerator / denominator;
-    }
-
-    // prettier-ignore
-    /// @notice gets all token ids
-    function getTokenIds() public view returns (uint256 bullId, uint256 bearId, uint256 liquidityId) {
-        return (TokenType.BULL.id(), TokenType.BEAR.id(), TokenType.LIQUIDITY.id());
-    }
-
+    /// @notice see {PiSwapLibrary-depositedEth}
     function depositedEth() public view returns (uint256) {
         uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
         return PiSwapLibrary.depositedEth(currentSupply);
     }
 
-    /// @notice see {PiSwapLibrary-mintOutGivenIn}
+    /// @notice returns reserve
+    /// @dev if ETH, balance of contract is subtracted by the deposited ETH
+    /// @dev if LIQUIDITY, reserve is amount of locked liquidity tokens
+    function getReserve(TokenType _tokenType) public view returns (uint256 reserve) {
+        reserve = registry.balanceOf(address(this), _tokenType.id());
+        if (_tokenType.isEth()) {
+            reserve -= depositedEth();
+        }
+    }
+
+    /// @notice see {IPiSwapMarket-mintOutGivenIn}
     function mintOutGivenIn(uint256 _amountIn) public view returns (uint256 amountOut) {
         uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
         amountOut = PiSwapLibrary.mintOutGivenIn(currentSupply, _amountIn);
     }
 
-    /// @notice see {PiSwapLibrary-mintInGivenOut}
+    /// @notice see {IPiSwapMarket-mintInGivenOut}
     function mintInGivenOut(uint256 _amountOut) public view returns (uint256 amountIn) {
         uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
         amountIn = PiSwapLibrary.mintInGivenOut(currentSupply, _amountOut);
     }
 
-    /// @notice see {PiSwapLibrary-burnOutGivenIn}
+    /// @notice see {IPiSwapMarket-burnOutGivenIn}
     function burnOutGivenIn(uint256 _amountIn) public view returns (uint256 amountOut) {
         uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
         amountOut = PiSwapLibrary.burnOutGivenIn(currentSupply, _amountIn);
     }
 
-    /// @notice see {PiSwapLibrary-burnInGivenOut}
+    /// @notice see {IPiSwapMarket-burnInGivenOut}
     function burnInGivenOut(uint256 _amountOut) public view returns (uint256 amountIn) {
         uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
         amountIn = PiSwapLibrary.burnInGivenOut(currentSupply, _amountOut);
+    }
+
+    /// @notice see {IPiSwapMarket-swapOutGivenIn}
+    function swapOutGivenIn(
+        uint256 _amountIn,
+        TokenType _tokenIn,
+        TokenType _tokenOut
+    ) public view returns (uint256 amountOut) {
+        (uint256 reserveIn, uint256 reserveOut) = _getSwapReserves(_tokenIn, _tokenOut);
+        uint256 amountInWithFee = (_amountIn * reserveIn) / (_amountIn + reserveIn);
+        amountOut = PiSwapLibrary.swapOutGivenIn(reserveIn, reserveOut, amountInWithFee);
+    }
+
+    /// @notice see {IPiSwapMarket-swapInGivenOut}
+    function swapInGivenOut(
+        uint256 _amountOut,
+        TokenType _tokenIn,
+        TokenType _tokenOut
+    ) public view returns (uint256 amountIn) {
+        (uint256 reserveIn, uint256 reserveOut) = _getSwapReserves(_tokenIn, _tokenOut);
+        uint256 amountInWithoutFee = PiSwapLibrary.swapInGivenOut(reserveIn, reserveOut, _amountOut);
+        require(reserveIn > amountInWithoutFee, _errMsg("swap", "MAX_IN"));
+        amountIn = (amountInWithoutFee * reserveIn) / (reserveIn - amountInWithoutFee);
+    }
+
+    /// @dev if ETH is swapped, adjust the reserve to the BULL/BEAR ratio
+    function _getSwapReserves(TokenType _tokenIn, TokenType _tokenOut) private view returns (uint256 reserveIn, uint256 reserveOut) {
+        reserveIn = getReserve(_tokenIn);
+        reserveOut = getReserve(_tokenOut);
+        require(reserveIn > 0 && reserveOut > 0, _errMsg("swap", "NOT_INITIALIZED"));
+        if (_tokenIn.isEth()) {
+            uint256 otherReserve = getReserve(_tokenOut.invert());
+            reserveIn = (reserveIn * otherReserve) / (reserveOut + otherReserve);
+        } else if (_tokenOut.isEth()) {
+            uint256 otherReserve = getReserve(_tokenIn.invert());
+            reserveOut = (reserveOut * otherReserve) / (reserveIn + otherReserve);
+        }
     }
 
     function _errMsg(string memory _method, string memory _message) private pure returns (string memory) {

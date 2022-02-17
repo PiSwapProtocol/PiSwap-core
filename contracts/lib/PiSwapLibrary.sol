@@ -56,7 +56,7 @@ library PiSwapLibrary {
     /// @param _amountIn    amount of tokens to burn
     /// @return amountOut   amount of eth out
     function burnOutGivenIn(uint256 _totalSupply, uint256 _amountIn) internal pure returns (uint256 amountOut) {
-        require(_amountIn <= _totalSupply, "PiSwapLibrary#burnOutGivenIn: AMOUNT_EXCEEDS_SUPPLY");
+        require(_amountIn <= _totalSupply, "PiSwapMarket#burn: AMOUNT_EXCEEDS_SUPPLY");
         uint256 currentEth = depositedEth(_totalSupply);
         uint256 depositedEthAfter = depositedEth(_totalSupply - _amountIn);
         amountOut = currentEth - depositedEthAfter;
@@ -75,6 +75,37 @@ library PiSwapLibrary {
                         MAX_SUPPLY + amountOut * (totalSupply - MAX_SUPPLY)
          */
         amountIn = (_amountOut * (MAX_SUPPLY - _totalSupply)**2 - 1) / (100 ether * MAX_SUPPLY + _amountOut * _totalSupply - _amountOut * MAX_SUPPLY) + 1;
-        require(amountIn <= _totalSupply, "PiSwapLibrary#burnInGivenOut: AMOUNT_EXCEEDS_SUPPLY");
+        require(amountIn <= _totalSupply, "PiSwapMarket#burn: AMOUNT_EXCEEDS_SUPPLY");
+    }
+
+    /// @notice calculates the amount of tokens out based on the amount in
+    /// @param _reserveIn  reserve of token in
+    /// @param _reserveOut reserve of token out
+    /// @param _amountIn   amount of tokens in
+    /// @return amountOut  amount of tokens received from swap for token in
+    function swapOutGivenIn(
+        uint256 _reserveIn,
+        uint256 _reserveOut,
+        uint256 _amountIn
+    ) internal pure returns (uint256 amountOut) {
+        uint256 numerator = _reserveOut * _amountIn;
+        uint256 denominator = _reserveIn + _amountIn;
+        amountOut = numerator / denominator;
+    }
+
+    /// @notice calculates the amount of tokens in based on the amount out
+    /// @param _reserveIn  reserve of token in
+    /// @param _reserveOut reserve of token out
+    /// @param _amountOut  amount of tokens out
+    /// @return amountIn   amount of tokens to send to swap to receive amount out
+    function swapInGivenOut(
+        uint256 _reserveIn,
+        uint256 _reserveOut,
+        uint256 _amountOut
+    ) internal pure returns (uint256 amountIn) {
+        uint256 numerator = _reserveIn * _amountOut;
+        require(_reserveOut > _amountOut, "PiSwapMarket#swap: MAX_OUT");
+        uint256 denominator = _reserveOut - _amountOut;
+        amountIn = numerator / denominator;
     }
 }

@@ -90,6 +90,26 @@ contract PiSwapRouter01 is ERC1155Holder, IPiSwapRouter01 {
         emit LiquidityRemoved(_market, msg.sender, _args.amountLiquidity, amountEth, amountBull, amountBear);
     }
 
+    function swap(
+        address _market,
+        Arguments.Swap calldata _args,
+        bool deposit_
+    ) external returns (uint256 amountIn, uint256 amountOut) {
+        IPiSwapMarket market = IPiSwapMarket(_market);
+        if (_args.kind.givenIn()) {
+            amountIn = _args.amount;
+        } else {
+            amountIn = market.swapInGivenOut(_args.amount, _args.tokenIn, _args.tokenOut);
+        }
+        if (_args.tokenIn.isEth()) {
+            _deposit(amountIn, deposit_);
+        } else {
+            registry.safeTransferFrom(msg.sender, address(this), _args.tokenIn.id(_market), amountIn, "");
+        }
+        (amountIn, amountOut) = market.swap(_args);
+        emit Swapped(_market, msg.sender, _args.tokenIn, _args.tokenOut, amountIn, amountOut);
+    }
+
     function _deposit(uint256 _amount, bool deposit_) private {
         if (deposit_) {
             WETH.safeTransferFrom(msg.sender, address(this), _amount);

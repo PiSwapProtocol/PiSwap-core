@@ -14,6 +14,7 @@ interface IPiSwapRouter01 {
     event Burned(address indexed market, address indexed sender, uint256 amountIn, uint256 amountOut);
     event LiquidityAdded(address indexed market, address indexed sender, uint256 liquidityMinted, uint256 amountEth, uint256 amountBull, uint256 amountBear);
     event LiquidityRemoved(address indexed market, address indexed sender, uint256 liquidityBurned, uint256 amountEth, uint256 amountBull, uint256 amountBear);
+    event Swapped(address indexed market, address indexed sender, TokenType tokenIn, TokenType tokenOut, uint256 amountIn, uint256 amountOut);
 
     function mint(
         address market,
@@ -42,4 +43,10 @@ interface IPiSwapRouter01 {
             uint256 amountBull,
             uint256 amountBear
         );
+
+    function swap(
+        address market,
+        Arguments.Swap calldata args,
+        bool deposit
+    ) external returns (uint256 amountIn, uint256 amountOut);
 }

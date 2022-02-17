@@ -40,6 +40,12 @@ library TokenTypeLib {
     function isEth(TokenType _type) internal pure returns (bool) {
         return _type == TokenType.ETH;
     }
+
+    /// @notice if type is BULL, return BEAR and vice versa
+    function invert(TokenType _type) internal pure returns (TokenType) {
+        assert(_type == TokenType.BULL || _type == TokenType.BEAR);
+        return _type == TokenType.BULL ? TokenType.BEAR : TokenType.BULL;
+    }
 }
 
 library SwapKindLib {
