@@ -13,7 +13,7 @@ describe('Market', async () => {
   before(async () => {
     accounts = await ethers.getSigners();
     p = await PiSwap.create(accounts[8].address);
-    await p.weth.deposit({ value: ethers.utils.parseEther('10') });
+    await p.weth.deposit({ value: ethers.utils.parseEther('100') });
     await p.weth.approve(p.router.address, ethers.constants.MaxUint256);
     market = await p.deplyoMarketERC721();
   });
@@ -61,7 +61,7 @@ describe('Market', async () => {
     });
 
     it('should be able to mint tokens given out', async () => {
-      const amountOut = ethers.utils.parseEther('10000');
+      const amountOut = ethers.utils.parseEther('1000');
       const { amountIn, fee } = await p.mintInGivenOutWithFee(market, amountOut);
 
       const tx = p.router.mint(
@@ -175,7 +175,7 @@ describe('Market', async () => {
     });
 
     it('should be able to mint tokens given out without fee', async () => {
-      const amountOut = ethers.utils.parseEther('10000');
+      const amountOut = ethers.utils.parseEther('1000');
       const amountIn = await p.mintInGivenOut(market, amountOut);
 
       const tx = p.router.mint(

@@ -7,19 +7,20 @@ pragma solidity 0.8.11;
 /// @dev This affects markets where >~10.000 ETH have been deposited
 library PiSwapLibrary {
     uint256 internal constant MAX_SUPPLY = 1000000 ether;
+    uint256 internal constant STRETCH_FACTOR = 10000 ether;
 
     /// @notice calculates the total supply based on the amount of ETH deposited into the contract
     /// @param _depositedEth amount of ETH deposited into the smart contract
     /// @return              total supply
     function totalSupply(uint256 _depositedEth) internal pure returns (uint256) {
-        return MAX_SUPPLY - ((MAX_SUPPLY * 100 ether - 1) / (_depositedEth + 100 ether) + 1);
+        return MAX_SUPPLY - ((MAX_SUPPLY * STRETCH_FACTOR - 1) / (_depositedEth + STRETCH_FACTOR) + 1);
     }
 
     /// @notice calculates the deposited ETH based on the total supply
     /// @param _totalSupply total supply
     /// @return             amount of ETH deposited into the smart contract
     function depositedEth(uint256 _totalSupply) internal pure returns (uint256) {
-        return (MAX_SUPPLY * 100 ether - 1) / (MAX_SUPPLY - _totalSupply) + 1 - 100 ether;
+        return (MAX_SUPPLY * STRETCH_FACTOR - 1) / (MAX_SUPPLY - _totalSupply) + 1 - STRETCH_FACTOR;
     }
 
     /// @notice calculates the amount of tokens minted based on the total supply
@@ -46,7 +47,7 @@ library PiSwapLibrary {
                                                                 MAX_SUPPLY - totalSupply - amountOut
          */
         amountIn =
-            (currentEth * _amountOut + 100 ether * _amountOut + currentEth * _totalSupply + _totalSupply * 100 ether - MAX_SUPPLY * currentEth - 1) /
+            (currentEth * _amountOut + STRETCH_FACTOR * _amountOut + currentEth * _totalSupply + _totalSupply * STRETCH_FACTOR - MAX_SUPPLY * currentEth - 1) /
             (MAX_SUPPLY - _totalSupply - _amountOut) +
             1;
     }
@@ -74,7 +75,7 @@ library PiSwapLibrary {
             amountIn = -----------------------------------------------------
                         MAX_SUPPLY + amountOut * (totalSupply - MAX_SUPPLY)
          */
-        amountIn = (_amountOut * (MAX_SUPPLY - _totalSupply)**2 - 1) / (100 ether * MAX_SUPPLY + _amountOut * _totalSupply - _amountOut * MAX_SUPPLY) + 1;
+        amountIn = (_amountOut * (MAX_SUPPLY - _totalSupply)**2 - 1) / (STRETCH_FACTOR * MAX_SUPPLY + _amountOut * _totalSupply - _amountOut * MAX_SUPPLY) + 1;
         require(amountIn <= _totalSupply, "PiSwapMarket#burn: AMOUNT_EXCEEDS_SUPPLY");
     }
 

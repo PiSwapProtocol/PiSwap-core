@@ -17,14 +17,14 @@ describe('Market', async () => {
     p = await PiSwap.create(accounts[8].address);
     market = await p.deplyoMarketERC721();
     liquidityId = p.getTokenId(market, c.tokenType.LIQUIDITY);
-    await p.weth.deposit({ value: ethers.utils.parseEther('10') });
+    await p.weth.deposit({ value: ethers.utils.parseEther('100') });
     await p.weth.approve(p.router.address, ethers.constants.MaxUint256);
     await p.registry.setApprovalForAll(p.router.address, true);
 
     await p.router.mint(
       market.address,
       {
-        amount: ethers.utils.parseEther('1'),
+        amount: ethers.utils.parseEther('90'),
         kind: c.swapKind.GIVEN_IN,
         to: accounts[0].address,
         slippage: 0,

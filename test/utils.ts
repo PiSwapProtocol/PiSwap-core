@@ -7,6 +7,7 @@ import { WETH9 } from '../typechain-types/WETH9';
 
 export class PiSwap {
   private maxSupply = ethers.utils.parseEther('1000000');
+  private stretchFactor = ethers.utils.parseEther('10000');
   private chainId!: number;
   public owner!: string;
   public beneficiary!: string;
@@ -103,14 +104,14 @@ export class PiSwap {
 
   public async depositedEth(market: PiSwapMarket, totalSupply?: BigNumber): Promise<BigNumber> {
     totalSupply = totalSupply ?? (await this.registry.totalSupply(this.getTokenId(market, 1)));
-    const numerator = this.maxSupply.mul(ethers.utils.parseEther('100')).sub('1');
+    const numerator = this.maxSupply.mul(this.stretchFactor).sub('1');
     const denominator = this.maxSupply.sub(totalSupply);
-    return numerator.div(denominator).add('1').sub(ethers.utils.parseEther('100'));
+    return numerator.div(denominator).add('1').sub(this.stretchFactor);
   }
 
   public async totalSupply(depositedEth: BigNumber): Promise<BigNumber> {
-    const numerator = this.maxSupply.mul(ethers.utils.parseEther('100')).sub('1');
-    const denominator = depositedEth.add(ethers.utils.parseEther('100'));
+    const numerator = this.maxSupply.mul(this.stretchFactor).sub('1');
+    const denominator = depositedEth.add(this.stretchFactor);
     return this.maxSupply.sub(numerator.div(denominator).add('1'));
   }
 
@@ -173,9 +174,9 @@ export class PiSwap {
     const totalSupply = await this.registry.totalSupply(this.getTokenId(market, 1));
     const numerator = currentEth
       .mul(amountOut)
-      .add(ethers.utils.parseEther('100').mul(amountOut))
+      .add(this.stretchFactor.mul(amountOut))
       .add(currentEth.mul(totalSupply))
-      .add(totalSupply.mul(ethers.utils.parseEther('100')))
+      .add(totalSupply.mul(this.stretchFactor))
       .sub(this.maxSupply.mul(currentEth));
     const denominator = this.maxSupply.sub(totalSupply).sub(amountOut);
     return numerator.div(denominator).add(1);
@@ -216,7 +217,7 @@ export class PiSwap {
     const totalSupply = await this.registry.totalSupply(this.getTokenId(market, 1));
     const numerator = amountOut.mul(this.maxSupply.sub(totalSupply).pow('2')).sub('1');
     const denominator = this.maxSupply
-      .mul(ethers.utils.parseEther('100'))
+      .mul(this.stretchFactor)
       .add(amountOut.mul(totalSupply))
       .sub(this.maxSupply.mul(amountOut));
     return numerator.div(denominator).add('1');

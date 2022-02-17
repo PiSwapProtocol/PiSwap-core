@@ -18,17 +18,17 @@ describe('Market', async () => {
     market = await p.deplyoMarketERC721();
     LiquidityTokenId = p.getTokenId(market, c.tokenType.LIQUIDITY);
 
-    await p.weth.deposit({ value: ethers.utils.parseEther('10') });
+    await p.weth.deposit({ value: ethers.utils.parseEther('100') });
     await p.weth.approve(p.router.address, ethers.constants.MaxUint256);
     await p.registry.setApprovalForAll(p.router.address, true);
-    await p.weth.connect(accounts[1]).deposit({ value: ethers.utils.parseEther('10') });
+    await p.weth.connect(accounts[1]).deposit({ value: ethers.utils.parseEther('100') });
     await p.weth.connect(accounts[1]).approve(p.router.address, ethers.constants.MaxUint256);
     await p.registry.connect(accounts[1]).setApprovalForAll(p.router.address, true);
 
     await p.router.mint(
       market.address,
       {
-        amount: ethers.utils.parseEther('1.5'),
+        amount: ethers.utils.parseEther('95'),
         kind: c.swapKind.GIVEN_IN,
         to: accounts[0].address,
         slippage: 0,
@@ -40,7 +40,7 @@ describe('Market', async () => {
     await p.router.connect(accounts[1]).mint(
       market.address,
       {
-        amount: ethers.utils.parseEther('1.5'),
+        amount: ethers.utils.parseEther('95'),
         kind: c.swapKind.GIVEN_IN,
         to: accounts[1].address,
         slippage: 0,
