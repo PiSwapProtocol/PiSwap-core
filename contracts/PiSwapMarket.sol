@@ -12,14 +12,19 @@ import "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
 
 import "hardhat/console.sol";
 
+// TODO: gas cost optimizations
+struct NFTData {
+    address tokenAddress;
+    uint256 tokenId;
+    NFTType nftType;
+}
+
 contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721HolderUpgradeable, ReentrancyGuardUpgradeable, IPiSwapMarket {
     using TokenTypeLib for TokenType;
     using SwapKindLib for SwapKind;
 
     IRegistry public registry;
-    address public NFTtokenAddress;
-    uint256 public NFTtokenId;
-    NFTType public nftType;
+    NFTData public nftData;
     uint256 private _ethReserve;
 
     uint256 public constant MAX_SUPPLY = 1000000 ether;
@@ -64,9 +69,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         __ERC721Holder_init();
         __ReentrancyGuard_init();
         registry = IRegistry(_msgSender());
-        NFTtokenAddress = _tokenAddress;
-        NFTtokenId = _tokenId;
-        nftType = _nftType;
+        nftData = NFTData(_tokenAddress, _tokenId, _nftType);
     }
 
     /// @notice see {IPiSwapMarket-mint}
@@ -215,17 +218,17 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     /// @param _amount   amount of NFT Tokens to swap (ERC1155 only)
     function buyNFT(uint256 _deadline, uint256 _amount) public payable nonReentrant {
         uint256 nftValue = NFTValue();
-        if (nftType == NFTType.ERC721) {
+        if (nftData.nftType == NFTType.ERC721) {
             require(msg.value >= nftValue, "Slippage");
-            IERC721_ NFT = IERC721_(NFTtokenAddress);
-            NFT.safeTransferFrom(address(this), _msgSender(), NFTtokenId, "");
+            IERC721_ NFT = IERC721_(nftData.tokenAddress);
+            NFT.safeTransferFrom(address(this), _msgSender(), nftData.tokenId, "");
             _safeTransfer(_msgSender(), msg.value - nftValue);
             emit NFTPurchase(_msgSender(), nftValue, 1);
         } else {
             require(_amount > 0, "Insufficient amount");
             require(msg.value >= nftValue * _amount, "Slippage");
-            IERC1155_ NFT = IERC1155_(NFTtokenAddress);
-            NFT.safeTransferFrom(address(this), _msgSender(), NFTtokenId, _amount, "");
+            IERC1155_ NFT = IERC1155_(nftData.tokenAddress);
+            NFT.safeTransferFrom(address(this), _msgSender(), nftData.tokenId, _amount, "");
             _safeTransfer(_msgSender(), msg.value - (nftValue * _amount));
             emit NFTPurchase(_msgSender(), nftValue, _amount);
         }
@@ -244,11 +247,11 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         uint256 bearReserve = getReserve(TokenType.BEAR);
         require(_ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
         uint256 nftValue = _NFTValue(bullReserve, bearReserve);
-        if (nftType == NFTType.ERC721) {
+        if (nftData.nftType == NFTType.ERC721) {
             require(_NFTSwapEnabled(bullReserve, bearReserve, 1), "NFT swapping not enabled");
             require(nftValue >= _minEth, "Slippage");
-            IERC721_ NFT = IERC721_(NFTtokenAddress);
-            NFT.safeTransferFrom(_msgSender(), address(this), NFTtokenId, "");
+            IERC721_ NFT = IERC721_(nftData.tokenAddress);
+            NFT.safeTransferFrom(_msgSender(), address(this), nftData.tokenId, "");
             _safeTransfer(_msgSender(), nftValue);
             emit NFTSell(_msgSender(), nftValue, 1);
         } else {
@@ -256,8 +259,8 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
             require(_NFTSwapEnabled(bullReserve, bearReserve, _amount), "NFT swapping not enabled");
             uint256 ethOut = nftValue * _amount;
             require(ethOut >= _minEth, "Slippage");
-            IERC1155_ NFT = IERC1155_(NFTtokenAddress);
-            NFT.safeTransferFrom(_msgSender(), address(this), NFTtokenId, _amount, "");
+            IERC1155_ NFT = IERC1155_(nftData.tokenAddress);
+            NFT.safeTransferFrom(_msgSender(), address(this), nftData.tokenId, _amount, "");
             _safeTransfer(_msgSender(), ethOut);
             emit NFTSell(_msgSender(), nftValue, _amount);
         }
