@@ -4,6 +4,7 @@ pragma solidity 0.8.11;
 import "./interfaces/IPiSwapMarket.sol";
 import "./lib/PiSwapLibrary.sol";
 
+import "./lib/Oracle.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/utils/ERC721HolderUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/utils/ERC1155HolderUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
@@ -20,14 +21,13 @@ struct NFTData {
 }
 
 contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721HolderUpgradeable, ReentrancyGuardUpgradeable, IPiSwapMarket {
+    using OracleLib for PriceSnapshot[];
     using TokenTypeLib for TokenType;
     using SwapKindLib for SwapKind;
 
     IRegistry public registry;
     NFTData public nftData;
-    uint256 private _ethReserve;
-
-    uint256 public constant MAX_SUPPLY = 1000000 ether;
+    PriceSnapshot[] public oracle;
 
     event SwapTokenPurchase(address indexed sender, TokenType indexed tokenType, uint256 amountIn, uint256 amountOut);
     event SwapTokenSell(address indexed sender, TokenType indexed tokenType, uint256 amountIn, uint256 amountOut);
@@ -198,6 +198,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         returns (uint256 amountIn, uint256 amountOut)
     {
         require(args.amount != 0, _errMsg("swap", "AMOUNT_ZERO"));
+        _registerPrice();
         if (args.kind.givenIn()) {
             amountIn = args.amount;
             amountOut = swapOutGivenIn(amountIn, args.tokenIn, args.tokenOut);
@@ -245,7 +246,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     ) public nonReentrant {
         uint256 bullReserve = getReserve(TokenType.BULL);
         uint256 bearReserve = getReserve(TokenType.BEAR);
-        require(_ethReserve > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
+        require(getReserve(TokenType.ETH) > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
         uint256 nftValue = _NFTValue(bullReserve, bearReserve);
         if (nftData.nftType == NFTType.ERC721) {
             require(_NFTSwapEnabled(bullReserve, bearReserve, 1), "NFT swapping not enabled");
@@ -313,7 +314,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         uint256 _bearReserve,
         uint256 _amount
     ) private view returns (bool) {
-        if (_ethReserve > 0 && _bullReserve > 0 && _bearReserve > 0) {
+        if (getReserve(TokenType.ETH) > 0 && _bullReserve > 0 && _bearReserve > 0) {
             uint256 nftValue = (_bearReserve * 1 ether) / _bullReserve;
             uint256 priceImpact = 10 ether;
             uint256 liquidityPool = address(this).balance - getReserve(TokenType.ETH);
@@ -390,8 +391,20 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         amountIn = (amountInWithoutFee * reserveIn) / (reserveIn - amountInWithoutFee);
     }
 
+    function lockedEth() public view returns (uint256 lockedEthForSwap) {
+        uint256 lockedLiquidity = (getReserve(TokenType.LIQUIDITY) * 1 ether) / registry.totalSupply(TokenType.LIQUIDITY.id());
+        assert(lockedLiquidity <= 1 ether);
+        if (lockedLiquidity == 0) {
+            return 0;
+        }
+        (uint256 ethReserve, uint256 tokenReserve) = _getSwapReserves(TokenType.ETH, TokenType.BULL);
+        uint256 lockedEthReserve = (ethReserve * lockedLiquidity) / 1 ether;
+        uint256 lockedTokensReserve = (tokenReserve * lockedLiquidity) / 1 ether;
+        lockedEthForSwap = PiSwapLibrary.lockedEth(lockedEthReserve, lockedTokensReserve);
+    }
+
     /// @dev if ETH is swapped, adjust the reserve to the BULL/BEAR ratio
-    function _getSwapReserves(TokenType _tokenIn, TokenType _tokenOut) private view returns (uint256 reserveIn, uint256 reserveOut) {
+    function _getSwapReserves(TokenType _tokenIn, TokenType _tokenOut) internal view returns (uint256 reserveIn, uint256 reserveOut) {
         reserveIn = getReserve(_tokenIn);
         reserveOut = getReserve(_tokenOut);
         require(reserveIn > 0 && reserveOut > 0, _errMsg("swap", "NOT_INITIALIZED"));
@@ -402,6 +415,29 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
             uint256 otherReserve = getReserve(_tokenIn.invert());
             reserveOut = (reserveOut * otherReserve) / (reserveIn + otherReserve);
         }
+    }
+
+    /// @notice register the current NFT price
+    /// @dev called before any trade is executed in a block, this way
+    function _registerPrice() internal {
+        uint256 length = oracle.length;
+        if (length == 0 || oracle[length - 1].timestamp < block.timestamp) {
+            uint256 bullReserve = getReserve(TokenType.BULL);
+            uint256 bearReserve = getReserve(TokenType.BEAR);
+            uint256 price = ((bearReserve * 1 ether) / bullReserve)**2 / 1 ether;
+            oracle.registerPrice(price);
+            emit PriceRegistered(price, block.timestamp);
+        }
+    }
+
+    /// @notice see {IPiSwapMarket-averageNftValue}
+    function averageNftValue(uint256 amount) public view returns (uint256) {
+        return oracle.avgPrice(amount);
+    }
+
+    /// @notice see {IPiSwapMarket-oracleLength}
+    function oracleLength() external view returns (uint256) {
+        return oracle.length;
     }
 
     function _errMsg(string memory _method, string memory _message) private pure returns (string memory) {

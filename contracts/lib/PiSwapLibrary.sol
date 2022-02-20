@@ -1,13 +1,17 @@
 //SPDX-License-Identifier:AGPL-3.0-only
 pragma solidity 0.8.11;
 
+import "./Math.sol";
+
 /// @dev When minting and burning tokens, due to precision errors, a few wei can be locked in the smart contract
 /// @dev These locked wei will be automatically added to the liquidity pool, the impact is insignificant
 /// @dev To avoid paying out more tokens than ETH locked, the calculations are rounded to ensure all bull and bear tokens can be redeemed
 /// @dev This affects markets where >~10.000 ETH have been deposited
 library PiSwapLibrary {
-    uint256 internal constant MAX_SUPPLY = 1000000 ether;
+    using Math for uint256;
+    uint256 internal constant MAX_SUPPLY = 1000000000 ether;
     uint256 internal constant STRETCH_FACTOR = 10000 ether;
+    uint256 internal constant ONE = 1 ether;
 
     /// @notice calculates the total supply based on the amount of ETH deposited into the contract
     /// @param _depositedEth amount of ETH deposited into the smart contract
@@ -108,5 +112,27 @@ library PiSwapLibrary {
         require(_reserveOut > _amountOut, "PiSwapMarket#swap: MAX_OUT");
         uint256 denominator = _reserveOut - _amountOut;
         amountIn = numerator / denominator;
+    }
+
+    /// @notice calculate the amount of locked ETH based on the eth and token reserve of either bull or bear token
+    /// @dev to avoid overflows, divide numerator and denominator by 10^18
+    /// @param ethReserve amount of ETH owned by the protocol
+    /// @param tokenReserve amount of tokens owned by the protocol
+    /// @return amount of locked ETH
+    function lockedEth(uint256 ethReserve, uint256 tokenReserve) internal pure returns (uint256) {
+        int256 lockedTokens;
+        unchecked {
+            // prettier-ignore
+            int256 numerator = int256(
+                ((tokenReserve ** 2) / ONE) * ethReserve
+                + MAX_SUPPLY * ((MAX_SUPPLY / ONE)*(STRETCH_FACTOR / ONE) * ethReserve * tokenReserve).sqrt()
+                - (MAX_SUPPLY / ONE) * ethReserve * tokenReserve
+                - (MAX_SUPPLY / ONE) * STRETCH_FACTOR * tokenReserve
+            );
+            int256 denominator = int256((STRETCH_FACTOR * MAX_SUPPLY - ethReserve * tokenReserve) / ONE);
+            lockedTokens = int256(tokenReserve) + (numerator / denominator);
+        }
+        assert(lockedTokens >= 0);
+        return depositedEth(uint256(lockedTokens));
     }
 }

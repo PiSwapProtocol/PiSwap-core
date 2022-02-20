@@ -15,6 +15,7 @@ interface IPiSwapMarket is Arguments {
     event LiquidityAdded(address indexed sender, address indexed to, uint256 liquidityMinted, uint256 amountEth, uint256 amountBull, uint256 amountBear);
     event LiquidityRemoved(address indexed sender, address indexed to, uint256 liquidityBurned, uint256 amountEth, uint256 amountBull, uint256 amountBear);
     event Swapped(address indexed sender, address indexed to, TokenType tokenIn, TokenType tokenOut, uint256 amountIn, uint256 amountOut);
+    event PriceRegistered(uint256 price, uint256 timestamp);
 
     /// @notice mint bull and bear tokens
     /// @param args see {Arguments-Mint}
@@ -87,6 +88,14 @@ interface IPiSwapMarket is Arguments {
         TokenType _tokenIn,
         TokenType _tokenOut
     ) external view returns (uint256 amountIn);
+
+    /// @notice get the average NFT value for the last n snapshots
+    /// @param amount of snapshots to average over
+    /// @return average price
+    function averageNftValue(uint256 amount) external view returns (uint256);
+
+    /// @return amount of price snapshots taken
+    function oracleLength() external view returns (uint256);
 
     //////////////////////////////////////////
 

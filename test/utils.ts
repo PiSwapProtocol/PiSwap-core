@@ -5,8 +5,10 @@ import { ERC1155, ERC165, ERC721, PiSwapMarket, PiSwapMarket__factory, PiSwapReg
 import { PiSwapRouter01 } from '../typechain-types/PiSwapRouter01';
 import { WETH9 } from '../typechain-types/WETH9';
 
+const ONE = ethers.utils.parseEther('1');
+
 export class PiSwap {
-  private maxSupply = ethers.utils.parseEther('1000000');
+  private maxSupply = ethers.utils.parseEther('1000000000');
   private stretchFactor = ethers.utils.parseEther('10000');
   private chainId!: number;
   public owner!: string;
@@ -253,15 +255,42 @@ export class PiSwap {
   ): Promise<BigNumber> {
     const { reserveIn } = await this.getSwapReserves(market, 0, nonTradedToken);
     const adjustedReserve = reserveBefore.add(reserveIn.sub(reserveBefore).div(2));
-    const impact = reserveIn.mul(ethers.utils.parseEther('1')).div(adjustedReserve).sub(ethers.utils.parseEther('1'));
-    return liquiditySupplyBefore.mul(impact).div(ethers.utils.parseEther('1'));
+    const impact = reserveIn.mul(ONE).div(adjustedReserve).sub(ONE);
+    return liquiditySupplyBefore.mul(impact).div(ONE);
+  }
+
+  public async lockedEth(market: PiSwapMarket): Promise<BigNumber> {
+    const lockedLiquidity = (await this.getReserve(market, 3))
+      .mul(ONE)
+      .div(await this.registry.totalSupply(this.getTokenId(market, 3)));
+    const { reserveIn, reserveOut } = await this.getSwapReserves(market, 0, 1);
+    const ethReserve = reserveIn.mul(lockedLiquidity).div(ONE);
+    const tokenReserve = reserveOut.mul(lockedLiquidity).div(ONE);
+    const numerator = ethReserve
+      .mul(tokenReserve.pow('2'))
+      .add(this.maxSupply.mul(sqrt(this.maxSupply.mul(this.stretchFactor).mul(ethReserve).mul(tokenReserve))))
+      .sub(this.maxSupply.mul(ethReserve).mul(tokenReserve))
+      .sub(this.maxSupply.mul(this.stretchFactor).mul(tokenReserve));
+    const denominator = this.maxSupply.mul(this.stretchFactor).sub(tokenReserve.mul(ethReserve));
+    return this.depositedEth(market, tokenReserve.add(numerator.div(denominator)));
   }
 }
-
-// export const deployProxy = async (marketAddress?: string): Promise<ProxyTest> => {
-//   return (await ethers.getContractFactory('ProxyTest')).deploy(marketAddress ?? ethers.constants.AddressZero);
-// };
 
 export const deployERC165 = async (): Promise<ERC165> => {
   return (await ethers.getContractFactory('SampleERC165')).deploy();
 };
+
+function sqrt(y: BigNumber) {
+  let z = ethers.BigNumber.from('0');
+  if (y.gt('3')) {
+    z = y;
+    let x = y.div('2').add('1');
+    while (x.lt(z)) {
+      z = x;
+      x = y.div(x).add(x).div('2');
+    }
+  } else if (!y.isZero()) {
+    z = ethers.BigNumber.from('1');
+  }
+  return z;
+}

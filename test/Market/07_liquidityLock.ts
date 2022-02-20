@@ -17,7 +17,7 @@ describe('Market', async () => {
     p = await PiSwap.create(accounts[8].address);
     market = await p.deplyoMarketERC721();
     liquidityId = p.getTokenId(market, c.tokenType.LIQUIDITY);
-    await p.weth.deposit({ value: ethers.utils.parseEther('100') });
+    await p.weth.deposit({ value: ethers.utils.parseEther('200') });
     await p.weth.approve(p.router.address, ethers.constants.MaxUint256);
     await p.registry.setApprovalForAll(p.router.address, true);
 
@@ -38,8 +38,8 @@ describe('Market', async () => {
       {
         amountEth: ethers.utils.parseEther('4'),
         minLiquidity: 0,
-        maxBull: ethers.utils.parseEther('5000'),
-        maxBear: ethers.utils.parseEther('5000'),
+        maxBull: ethers.utils.parseEther('500000'),
+        maxBear: ethers.utils.parseEther('500000'),
         to: accounts[0].address,
         deadline: c.unix2100,
         userData: [],
@@ -48,7 +48,7 @@ describe('Market', async () => {
     );
   });
 
-  describe('Liquidity Lock', async () => {
+  describe('Liquidity lock + locked ETH', async () => {
     it('should lock liquidity on eth => bull swap', async () => {
       const { reserveIn } = await p.getSwapReserves(market, c.tokenType.ETH, c.tokenType.BEAR);
       const liquiditySupply = await p.registry.totalSupply(liquidityId);
@@ -72,6 +72,7 @@ describe('Market', async () => {
       await expect(tx)
         .to.emit(p.registry, 'TransferSingle')
         .withArgs(market.address, ethers.constants.AddressZero, market.address, liquidityId, mintedLiquidity);
+      expect(await market.lockedEth()).to.equal(await p.lockedEth(market));
     });
 
     it('should lock liquidity on eth => bear swap', async () => {
@@ -97,6 +98,7 @@ describe('Market', async () => {
       await expect(tx)
         .to.emit(p.registry, 'TransferSingle')
         .withArgs(market.address, ethers.constants.AddressZero, market.address, liquidityId, mintedLiquidity);
+      expect(await market.lockedEth()).to.equal(await p.lockedEth(market));
     });
 
     it('should lock liquidity on bull => eth swap', async () => {
@@ -106,7 +108,7 @@ describe('Market', async () => {
       const tx = p.router.swap(
         market.address,
         {
-          amount: ethers.utils.parseEther('1000'),
+          amount: ethers.utils.parseEther('100000'),
           tokenIn: c.tokenType.BULL,
           tokenOut: c.tokenType.ETH,
           kind: c.swapKind.GIVEN_IN,
@@ -122,6 +124,7 @@ describe('Market', async () => {
       await expect(tx)
         .to.emit(p.registry, 'TransferSingle')
         .withArgs(market.address, ethers.constants.AddressZero, market.address, liquidityId, mintedLiquidity);
+      expect(await market.lockedEth()).to.equal(await p.lockedEth(market));
     });
 
     it('should lock liquidity on bear => eth swap', async () => {
@@ -131,7 +134,7 @@ describe('Market', async () => {
       const tx = p.router.swap(
         market.address,
         {
-          amount: ethers.utils.parseEther('1000'),
+          amount: ethers.utils.parseEther('100000'),
           tokenIn: c.tokenType.BEAR,
           tokenOut: c.tokenType.ETH,
           kind: c.swapKind.GIVEN_IN,
@@ -147,6 +150,7 @@ describe('Market', async () => {
       await expect(tx)
         .to.emit(p.registry, 'TransferSingle')
         .withArgs(market.address, ethers.constants.AddressZero, market.address, liquidityId, mintedLiquidity);
+      expect(await market.lockedEth()).to.equal(await p.lockedEth(market));
     });
 
     it('should not lock liquidity on bull => bear swap', async () => {
@@ -155,7 +159,7 @@ describe('Market', async () => {
       await p.router.swap(
         market.address,
         {
-          amount: ethers.utils.parseEther('1000'),
+          amount: ethers.utils.parseEther('100000'),
           tokenIn: c.tokenType.BULL,
           tokenOut: c.tokenType.BEAR,
           kind: c.swapKind.GIVEN_IN,
@@ -168,6 +172,7 @@ describe('Market', async () => {
       );
 
       expect(await p.registry.totalSupply(liquidityId)).to.equal(liquiditySupply);
+      expect(await market.lockedEth()).to.equal(await p.lockedEth(market));
     });
 
     it('should not lock liquidity on bear => bull swap', async () => {
@@ -176,7 +181,7 @@ describe('Market', async () => {
       await p.router.swap(
         market.address,
         {
-          amount: ethers.utils.parseEther('1000'),
+          amount: ethers.utils.parseEther('100000'),
           tokenIn: c.tokenType.BEAR,
           tokenOut: c.tokenType.BULL,
           kind: c.swapKind.GIVEN_IN,
@@ -189,6 +194,26 @@ describe('Market', async () => {
       );
 
       expect(await p.registry.totalSupply(liquidityId)).to.equal(liquiditySupply);
+      expect(await market.lockedEth()).to.equal(await p.lockedEth(market));
+    });
+
+    it('should lock eth correctly as well if numerator/denominator is positive', async () => {
+      await p.router.swap(
+        market.address,
+        {
+          amount: ethers.utils.parseEther('10'),
+          tokenIn: c.tokenType.ETH,
+          tokenOut: c.tokenType.BULL,
+          kind: c.swapKind.GIVEN_IN,
+          to: accounts[0].address,
+          slippage: 0,
+          deadline: c.unix2100,
+          userData: [],
+        },
+        true
+      );
+
+      expect(await market.lockedEth()).to.equal(await p.lockedEth(market));
     });
   });
 });
