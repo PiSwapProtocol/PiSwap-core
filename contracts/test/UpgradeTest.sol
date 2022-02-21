@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.11;
 
-import "../interfaces/Types.sol";
+import "../lib/Types.sol";
 
 interface IUpgradeTest {
     function test() external pure returns (uint256);
@@ -9,10 +9,9 @@ interface IUpgradeTest {
 
 abstract contract UpgradeTest is IUpgradeTest {
     function initialize(
-        address _tokenAddress,
-        uint256 _tokenId,
-        address _registry,
-        NFTType _nftType
+        address,
+        uint256,
+        NFTType
     ) external {}
 }
 

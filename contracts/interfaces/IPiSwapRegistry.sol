@@ -1,12 +1,14 @@
 //SPDX-License-Identifier:AGPL-3.0-only
 pragma solidity 0.8.11;
 
-import "./Types.sol";
+import "../lib/Types.sol";
 
 interface IPiSwapRegistry {
     event MarketCreated(address indexed market, address indexed NFTContract, uint256 indexed tokenId);
     event Deposit(address indexed sender, uint256 amount);
     event Withdrawal(address indexed sender, address indexed to, uint256 amount);
+    event FeeUpdated(uint256 feeBefore, uint256 feeAfter);
+    event OracleLengthUpdated(uint256 lengthBefore, uint256 lengthAfter);
 
     function WETH() external view returns (address);
 
@@ -33,4 +35,6 @@ interface IPiSwapRegistry {
     function beneficiary() external view returns (address);
 
     function fee() external view returns (uint256);
+
+    function oracleLength() external view returns (uint256);
 }

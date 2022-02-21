@@ -52,8 +52,4 @@ library SwapKindLib {
     function givenIn(SwapKind _kind) internal pure returns (bool) {
         return _kind == SwapKind.GIVEN_IN;
     }
-
-    function givenOut(SwapKind _kind) internal pure returns (bool) {
-        return _kind == SwapKind.GIVEN_OUT;
-    }
 }

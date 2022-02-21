@@ -403,6 +403,38 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         lockedEthForSwap = PiSwapLibrary.lockedEth(lockedEthReserve, lockedTokensReserve);
     }
 
+    function nftValueAccumulated() public view returns (uint256) {
+        uint256 length = oracle.length;
+        uint256 requiredLength = registry.oracleLength();
+        require(length >= requiredLength, _errMsg("oracle", "ORACLE_NOT_INITIALIZED"));
+        return nftValueAvg(requiredLength);
+    }
+
+    function swapEnabled() public view returns (bool) {
+        return lockedEth() > nftValueAccumulated();
+    }
+
+    /// @notice see {IPiSwapMarket-averageNftValue}
+    function nftValueAvg(uint256 amount) public view returns (uint256) {
+        return oracle.avgPrice(amount);
+    }
+
+    function nftValue() external view returns (uint256) {
+        uint256 length = oracle.length;
+        return length > 0 ? oracle[length - 1].price : _nftValue();
+    }
+
+    /// @notice see {IPiSwapMarket-oracleLength}
+    function oracleLength() external view returns (uint256) {
+        return oracle.length;
+    }
+
+    function _nftValue() internal view returns (uint256) {
+        uint256 bullReserve = getReserve(TokenType.BULL);
+        assert(bullReserve > 0);
+        return ((getReserve(TokenType.BEAR) * 1 ether) / bullReserve)**2 / 1 ether;
+    }
+
     /// @dev if ETH is swapped, adjust the reserve to the BULL/BEAR ratio
     function _getSwapReserves(TokenType _tokenIn, TokenType _tokenOut) internal view returns (uint256 reserveIn, uint256 reserveOut) {
         reserveIn = getReserve(_tokenIn);
@@ -422,22 +454,10 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     function _registerPrice() internal {
         uint256 length = oracle.length;
         if (length == 0 || oracle[length - 1].timestamp < block.timestamp) {
-            uint256 bullReserve = getReserve(TokenType.BULL);
-            uint256 bearReserve = getReserve(TokenType.BEAR);
-            uint256 price = ((bearReserve * 1 ether) / bullReserve)**2 / 1 ether;
+            uint256 price = _nftValue();
             oracle.registerPrice(price);
             emit PriceRegistered(price, block.timestamp);
         }
-    }
-
-    /// @notice see {IPiSwapMarket-averageNftValue}
-    function averageNftValue(uint256 amount) public view returns (uint256) {
-        return oracle.avgPrice(amount);
-    }
-
-    /// @notice see {IPiSwapMarket-oracleLength}
-    function oracleLength() external view returns (uint256) {
-        return oracle.length;
     }
 
     function _errMsg(string memory _method, string memory _message) private pure returns (string memory) {

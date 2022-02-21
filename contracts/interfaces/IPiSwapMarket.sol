@@ -92,7 +92,7 @@ interface IPiSwapMarket is Arguments {
     /// @notice get the average NFT value for the last n snapshots
     /// @param amount of snapshots to average over
     /// @return average price
-    function averageNftValue(uint256 amount) external view returns (uint256);
+    function nftValueAvg(uint256 amount) external view returns (uint256);
 
     /// @return amount of price snapshots taken
     function oracleLength() external view returns (uint256);

@@ -274,6 +274,12 @@ export class PiSwap {
     const denominator = this.maxSupply.mul(this.stretchFactor).sub(tokenReserve.mul(ethReserve));
     return this.depositedEth(market, tokenReserve.add(numerator.div(denominator)));
   }
+
+  public async nftValue(market: PiSwapMarket, bullReserve?: BigNumber, bearReserve?: BigNumber): Promise<BigNumber> {
+    bullReserve = bullReserve ?? (await this.getReserve(market, 1));
+    bearReserve = bearReserve ?? (await this.getReserve(market, 2));
+    return bearReserve.mul(ONE).div(bullReserve).pow('2').div(ONE);
+  }
 }
 
 export const deployERC165 = async (): Promise<ERC165> => {

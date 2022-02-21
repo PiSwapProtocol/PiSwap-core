@@ -3,7 +3,7 @@ import { expect } from 'chai';
 import { ethers } from 'hardhat';
 import { ERC721, PiSwapMarket, PiSwapRegistry__factory } from '../../typechain-types';
 import c from '../constants';
-import { deployERC165, deployProxy, PiSwap } from '../utils';
+import { deployERC165, PiSwap } from '../utils';
 
 describe('Registry', async () => {
   let accounts: SignerWithAddress[];
@@ -41,32 +41,36 @@ describe('Registry', async () => {
     });
 
     it('deployed market should register ERC721 token', async () => {
-      expect(await market.nftType()).to.equal(c.NFTType.ERC721);
+      expect((await market.nftData()).nftType).to.equal(c.NFTType.ERC721);
     });
 
     it('deployed market should register ERC1155 token', async () => {
       const market = await p.deplyoMarketERC1155();
-      expect(await market.nftType()).to.equal(c.NFTType.ERC1155);
+      expect((await market.nftData()).nftType).to.equal(c.NFTType.ERC1155);
     });
 
     it('should fail if contract does not implement ERC165', async () => {
-      const token = await deployProxy();
+      const token = await (await ethers.getContractFactory('UpgradeTestA')).deploy();
       await expect(p.registry.createMarket(token.address, 0)).to.be.reverted;
     });
 
     it('should fail if contract has not registered an ERC165 interface for ERC721 or ERC1155', async () => {
       const token = await deployERC165();
       await expect(p.registry.createMarket(token.address, 0)).to.be.revertedWith(
-        c.errorMessages.unsupportedSmartContract
+        'PiSwapRegistry#createMarket: UNSUPPORTED_CONTRACT'
       );
     });
 
     it('should not allow creating markets if a market already exists', async () => {
-      await expect(p.registry.createMarket(token.address, 0)).to.be.revertedWith(c.errorMessages.marketAlreadyExists);
+      await expect(p.registry.createMarket(token.address, 0)).to.be.revertedWith(
+        'PiSwapRegistry#createMarket: MARKET_EXISTS'
+      );
     });
 
     it('should not allow creating market for itself', async () => {
-      await expect(p.registry.createMarket(p.registry.address, 0)).to.be.revertedWith(c.errorMessages.disallowContract);
+      await expect(p.registry.createMarket(p.registry.address, 0)).to.be.revertedWith(
+        'PiSwapRegistry#createMarket: INVALID'
+      );
     });
   });
 });

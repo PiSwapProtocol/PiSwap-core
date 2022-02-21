@@ -42,11 +42,12 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
     mapping(address => mapping(uint256 => address)) public markets;
 
     uint256 public fee;
+    uint256 public oracleLength;
 
     uint8 public constant decimals = 18;
 
     modifier onlyMarket() {
-        require(_isMarket(_msgSender()), "Only callable by markets");
+        require(_isMarket(_msgSender()), _errMsg("mint/burn", "ONLY_MARKET"));
         _;
     }
 
@@ -63,6 +64,7 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
         __ERC1155Supply_init();
         beneficiary = _beneficiary;
         fee = 50;
+        oracleLength = 60;
         WETH = _weth;
     }
 
@@ -71,8 +73,8 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
     /// @param _tokenId          Id of the NFT
     /// @return market           the address of the deployed market contract
     function createMarket(address _tokenAddress, uint256 _tokenId) external returns (address market) {
-        require(markets[_tokenAddress][_tokenId] == address(0), "Market already exists");
-        require(_tokenAddress != address(this), "Cannot create market for this contract");
+        require(markets[_tokenAddress][_tokenId] == address(0), _errMsg("createMarket", "MARKET_EXISTS"));
+        require(_tokenAddress != address(this), _errMsg("createMarket", "INVALID"));
         NFT memory data = NFT({tokenAddress: _tokenAddress, tokenId: _tokenId});
 
         // deploy market contract
@@ -104,7 +106,7 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
         uint256 _amount,
         TokenType _tokenType
     ) public onlyMarket {
-        require(_amount > 0, "Amount can't be zero");
+        require(_amount > 0, _errMsg("mint", "AMOUNT_ZERO"));
         uint256 tokenId = _tokenType.id(_msgSender());
         _mint(_to, tokenId, _amount, "");
     }
@@ -119,20 +121,27 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
         uint256 _amount,
         TokenType _tokenType
     ) public onlyMarket {
-        require(_amount > 0, "Amount can't be zero");
+        require(_amount > 0, _errMsg("burn", "AMOUNT_ZERO"));
         uint256 tokenId = _tokenType.id(_msgSender());
         _burn(_from, tokenId, _amount);
     }
 
-    function setFee(uint256 _fee) public onlyOwner {
-        require(fee <= 200);
-        fee = _fee;
+    function setFee(uint256 _newFee) public onlyOwner {
+        require(_newFee <= 200);
+        emit FeeUpdated(fee, _newFee);
+        fee = _newFee;
+    }
+
+    function setOracleLength(uint256 _newOracleLength) public onlyOwner {
+        require(_newOracleLength >= 5);
+        emit OracleLengthUpdated(oracleLength, _newOracleLength);
+        oracleLength = _newOracleLength;
     }
 
     function setBeneficiary(address _beneficiary) public onlyOwner {
-        if (_beneficiary.isContract()) {
-            require(IERC165Upgradeable(_beneficiary).supportsInterface(0x4e2312e0), "PiSwapRegistry#setBeneficiary: DOES_NOT_SUPPORT_ERC1155RECEIVER");
-        }
+        // if (_beneficiary.isContract()) {
+        //     require(IERC165Upgradeable(_beneficiary).supportsInterface(0x4e2312e0), "PiSwapRegistry#setBeneficiary: DOES_NOT_SUPPORT_ERC1155RECEIVER");
+        // }
         beneficiary = _beneficiary;
     }
 
@@ -169,8 +178,12 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
         } else if (token.supportsInterface(0xd9b67a26)) {
             return NFTType.ERC1155;
         } else {
-            revert("Unsupported smart contract");
+            revert(_errMsg("createMarket", "UNSUPPORTED_CONTRACT"));
         }
+    }
+
+    function _errMsg(string memory _method, string memory _message) private pure returns (string memory) {
+        return string(abi.encodePacked("PiSwapRegistry#", _method, ": ", _message));
     }
 
     uint256[50] private __gap;

@@ -13,7 +13,7 @@ library OracleLib {
 
     function avgPrice(PriceSnapshot[] storage oracle, uint256 amount) internal view returns (uint256) {
         uint256 length = oracle.length;
-        require(length >= amount, "Oracle#averageNftValue: INSUFFICIENT_DATA");
+        require(length >= amount, "Oracle#avgPrice: INSUFFICIENT_DATA");
         uint256 total = 0;
         for (uint256 i = length - amount; i < length; i++) {
             total += oracle[i].price;

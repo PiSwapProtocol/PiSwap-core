@@ -17,7 +17,7 @@ describe('Registry', async () => {
     });
     it('should not be able to mint tokens from non market accounts', async () => {
       await expect(p.registry.mint(accounts[1].address, 1, c.tokenType.BULL)).to.be.revertedWith(
-        c.errorMessages.onlyMarkets
+        'PiSwapRegistry#mint/burn: ONLY_MARKET'
       );
     });
   });
