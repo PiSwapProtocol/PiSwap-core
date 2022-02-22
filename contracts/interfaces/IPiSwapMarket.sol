@@ -16,6 +16,9 @@ interface IPiSwapMarket is Arguments {
     event LiquidityRemoved(address indexed sender, address indexed to, uint256 liquidityBurned, uint256 amountEth, uint256 amountBull, uint256 amountBear);
     event Swapped(address indexed sender, address indexed to, TokenType tokenIn, TokenType tokenOut, uint256 amountIn, uint256 amountOut);
     event PriceRegistered(uint256 price, uint256 timestamp);
+    event NFTPurchased(address indexed sender, address indexed to, uint256 price, uint256 amount);
+    event NFTSold(address indexed sender, address indexed to, uint256 price, uint256 amount);
+    event RoyaltyPaid(address indexed receiver, uint256 amount);
 
     /// @notice mint bull and bear tokens
     /// @param args see {Arguments-Mint}
@@ -60,6 +63,17 @@ interface IPiSwapMarket is Arguments {
     /// @return amountIn amount of tokens in
     /// @return amountOut amount of tokens out
     function swap(Arguments.Swap calldata args) external returns (uint256 amountIn, uint256 amountOut);
+
+    /// @notice sell an NFT to the smart contract
+    /// @dev pays out up to 10% royalty supporting the ERC-2981 standard
+    /// @param args see {Arguments-NFTSwap}
+    /// @return true on success
+    function sellNFT(Arguments.NFTSwap calldata args) external returns (bool);
+
+    /// @notice buy NFT from the smart contract
+    /// @param args see {Arguments-NFTSwap}
+    /// @return true on success
+    function buyNFT(Arguments.NFTSwap calldata args) external returns (bool);
 
     /// @notice see {PiSwapLibrary-mintOutGivenIn}
     function mintOutGivenIn(uint256 _amountIn) external view returns (uint256 amountOut);
@@ -110,20 +124,6 @@ interface IPiSwapMarket is Arguments {
 
     /// @return amount of price snapshots taken
     function oracleLength() external view returns (uint256);
-
-    //////////////////////////////////////////
-
-    function buyNFT(uint256 _deadline, uint256 _amount) external payable;
-
-    function sellNFT(
-        uint256 _minEth,
-        uint256 _deadline,
-        uint256 _amount
-    ) external;
-
-    function NFTValue() external view returns (uint256);
-
-    function NFTSwapEnabled() external view returns (bool);
 }
 
 interface IERC721_ {

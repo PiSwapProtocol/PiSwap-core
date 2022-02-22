@@ -77,4 +77,14 @@ interface Arguments {
         uint256 deadline;
         bytes userData;
     }
+
+    /// @param amount of NFTs to buy/sell (has to be 1 when swapping ERC721 tokens)
+    /// @param (slippage, to, deadline, userData) see {Mint}
+    struct NFTSwap {
+        uint256 amount;
+        uint256 slippage;
+        address to;
+        uint256 deadline;
+        bytes userData;
+    }
 }

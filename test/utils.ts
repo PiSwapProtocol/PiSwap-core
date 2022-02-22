@@ -86,6 +86,13 @@ export class PiSwap {
     return (await ethers.getContractFactory('SampleERC1155')).deploy();
   }
 
+  public async getERC721(address: string): Promise<ERC721> {
+    return (await ethers.getContractFactory('SampleERC721')).connect(ethers.provider.getSigner()).attach(address);
+  }
+  public async getERC1155(address: string): Promise<ERC1155> {
+    return (await ethers.getContractFactory('SampleERC1155')).connect(ethers.provider.getSigner()).attach(address);
+  }
+
   public async getMarket(address: string): Promise<PiSwapMarket> {
     return PiSwapMarket__factory.connect(address, ethers.provider.getSigner());
   }

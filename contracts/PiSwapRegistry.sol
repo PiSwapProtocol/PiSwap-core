@@ -10,8 +10,6 @@ import "./lib/BeaconUpgradeable.sol";
 
 import "./lib/BeaconProxyOptimized.sol";
 
-import "hardhat/console.sol";
-
 interface IMarket {
     function initialize(
         address _tokenAddress,

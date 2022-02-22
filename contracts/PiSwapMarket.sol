@@ -2,6 +2,7 @@
 pragma solidity 0.8.11;
 
 import "./interfaces/IPiSwapMarket.sol";
+import "./interfaces/IERC2981.sol";
 import "./lib/PiSwapLibrary.sol";
 
 import "./lib/Oracle.sol";
@@ -11,12 +12,9 @@ import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
 
-import "hardhat/console.sol";
-
-// TODO: gas cost optimizations
 struct NFTData {
-    address tokenAddress;
     uint256 tokenId;
+    address tokenAddress;
     NFTType nftType;
 }
 
@@ -28,11 +26,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     IRegistry public registry;
     NFTData public nftData;
     PriceSnapshot[] public oracle;
-
-    event SwapTokenPurchase(address indexed sender, TokenType indexed tokenType, uint256 amountIn, uint256 amountOut);
-    event SwapTokenSell(address indexed sender, TokenType indexed tokenType, uint256 amountIn, uint256 amountOut);
-    event NFTPurchase(address indexed buyer, uint256 nftValue, uint256 amount);
-    event NFTSell(address indexed seller, uint256 nftValue, uint256 amount);
+    int256 internal lockedEthCorrection;
 
     modifier ensure(uint256 _deadline, string memory _method) {
         require(block.timestamp < _deadline, _errMsg(_method, "EXPIRED"));
@@ -69,7 +63,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         __ERC721Holder_init();
         __ReentrancyGuard_init();
         registry = IRegistry(_msgSender());
-        nftData = NFTData(_tokenAddress, _tokenId, _nftType);
+        nftData = NFTData(_tokenId, _tokenAddress, _nftType);
     }
 
     /// @notice see {IPiSwapMarket-mint}
@@ -213,119 +207,56 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         emit Swapped(_msgSender(), args.to, args.tokenIn, args.tokenOut, amountIn, amountOut);
     }
 
-    /// @notice swaps ETH for the NFT held by the contract
-    /// @dev    if contract holds NFT, it should be purchasable at all times
-    /// @param _deadline time after which the transaction should not be executed anymore
-    /// @param _amount   amount of NFT Tokens to swap (ERC1155 only)
-    function buyNFT(uint256 _deadline, uint256 _amount) public payable nonReentrant {
-        uint256 nftValue = NFTValue();
+    /// @notice see {PiSwapLibrary-sellNFT}
+    function sellNFT(NFTSwap calldata args) external ensure(args.deadline, "sellNFT") nonReentrant returns (bool) {
+        uint256 nftValueAcc = nftValueAccumulated();
+        require(nftValueAcc >= args.slippage, _errMsg("sellNFT", "SLIPPAGE"));
+        uint256 totalValue = nftValueAcc * args.amount;
+        require(_sufficientLiquidityForSwap(nftValueAcc, args.amount), _errMsg("sellNFT", "INSUFFICIENT_LIQUIDITY"));
+        address nftAddress = nftData.tokenAddress;
         if (nftData.nftType == NFTType.ERC721) {
-            require(msg.value >= nftValue, "Slippage");
-            IERC721_ NFT = IERC721_(nftData.tokenAddress);
-            NFT.safeTransferFrom(address(this), _msgSender(), nftData.tokenId, "");
-            _safeTransfer(_msgSender(), msg.value - nftValue);
-            emit NFTPurchase(_msgSender(), nftValue, 1);
-        } else {
-            require(_amount > 0, "Insufficient amount");
-            require(msg.value >= nftValue * _amount, "Slippage");
-            IERC1155_ NFT = IERC1155_(nftData.tokenAddress);
-            NFT.safeTransferFrom(address(this), _msgSender(), nftData.tokenId, _amount, "");
-            _safeTransfer(_msgSender(), msg.value - (nftValue * _amount));
-            emit NFTPurchase(_msgSender(), nftValue, _amount);
-        }
-    }
-
-    /// @notice swaps an NFT for ETH
-    /// @param _minEth   minimum desired amount of ETH to receive
-    /// @param _deadline time after which the transaction should not be executed anymore
-    /// @param _amount   amount of NFT Tokens to swap (ERC1155 only)
-    function sellNFT(
-        uint256 _minEth,
-        uint256 _deadline,
-        uint256 _amount
-    ) public nonReentrant {
-        uint256 bullReserve = getReserve(TokenType.BULL);
-        uint256 bearReserve = getReserve(TokenType.BEAR);
-        require(getReserve(TokenType.ETH) > 0 && bullReserve > 0 && bearReserve > 0, "Reserve empty");
-        uint256 nftValue = _NFTValue(bullReserve, bearReserve);
-        if (nftData.nftType == NFTType.ERC721) {
-            require(_NFTSwapEnabled(bullReserve, bearReserve, 1), "NFT swapping not enabled");
-            require(nftValue >= _minEth, "Slippage");
-            IERC721_ NFT = IERC721_(nftData.tokenAddress);
+            require(args.amount == 1, _errMsg("sellNFT", "INVALID_AMOUNT"));
+            IERC721_ NFT = IERC721_(nftAddress);
             NFT.safeTransferFrom(_msgSender(), address(this), nftData.tokenId, "");
-            _safeTransfer(_msgSender(), nftValue);
-            emit NFTSell(_msgSender(), nftValue, 1);
         } else {
-            require(_amount > 0, "Insufficient amount");
-            require(_NFTSwapEnabled(bullReserve, bearReserve, _amount), "NFT swapping not enabled");
-            uint256 ethOut = nftValue * _amount;
-            require(ethOut >= _minEth, "Slippage");
-            IERC1155_ NFT = IERC1155_(nftData.tokenAddress);
-            NFT.safeTransferFrom(_msgSender(), address(this), nftData.tokenId, _amount, "");
-            _safeTransfer(_msgSender(), ethOut);
-            emit NFTSell(_msgSender(), nftValue, _amount);
+            require(args.amount > 0, _errMsg("sellNFT", "INVALID_AMOUNT"));
+            IERC1155_ NFT = IERC1155_(nftAddress);
+            NFT.safeTransferFrom(_msgSender(), address(this), nftData.tokenId, args.amount, "");
         }
-    }
-
-    /// @notice securely transfer eth to a specified address
-    /// @dev           fails if transfer unsuccessful
-    /// @param _to     address to transfer to
-    /// @param _amount amount to transfer
-    function _safeTransfer(address _to, uint256 _amount) private {
-        (bool success, ) = _to.call{value: _amount}("");
-        require(success, "Transfer failed");
-    }
-
-    /// @notice calculates the value of the NFT based on the token reserves
-    /// @return value of the NFT in ETH
-    function NFTValue() public view returns (uint256) {
-        uint256 bullReserve = getReserve(TokenType.BULL);
-        uint256 bearReserve = getReserve(TokenType.BEAR);
-        return _NFTValue(bullReserve, bearReserve);
-    }
-
-    /// @notice calculates the value of the NFT based on the token reserves
-    /// @dev                private functions for gas savings
-    /// @param _bullReserve bull token reserve size
-    /// @param _bearReserve bear token reserve size
-    /// @return             value of the NFT in ETH
-    function _NFTValue(uint256 _bullReserve, uint256 _bearReserve) private pure returns (uint256) {
-        return (_bearReserve * 1 ether) / _bullReserve;
-    }
-
-    /// @notice calculates if swapping of NFTs is enabled based on the token reserves
-    /// @dev    returns if at least 1 NFT can be swapped
-    /// @return returns if swapping of NFTs is enabled
-    function NFTSwapEnabled() public view returns (bool) {
-        uint256 bullReserve = getReserve(TokenType.BULL);
-        uint256 bearReserve = getReserve(TokenType.BEAR);
-        return _NFTSwapEnabled(bullReserve, bearReserve, 1);
-    }
-
-    /// @notice calculates whether a certain amount of NFTs can be swapped
-    /// @dev                for ERC1155 more than 1 token can be swapped
-    /// @dev                private functions for gas savings
-    /// @param _bullReserve bull token reserve size
-    /// @param _bearReserve bear token reserve size
-    /// @param _amount      amount of tokens to swap
-    /// @return             returns if swapping of NFTs is enabled
-    function _NFTSwapEnabled(
-        uint256 _bullReserve,
-        uint256 _bearReserve,
-        uint256 _amount
-    ) private view returns (bool) {
-        if (getReserve(TokenType.ETH) > 0 && _bullReserve > 0 && _bearReserve > 0) {
-            uint256 nftValue = (_bearReserve * 1 ether) / _bullReserve;
-            uint256 priceImpact = 10 ether;
-            uint256 liquidityPool = address(this).balance - getReserve(TokenType.ETH);
-            uint256 minLiquidity = (nftValue * priceImpact) / 1 ether;
-            if (liquidityPool >= minLiquidity) {
-                // always true for ERC721
-                require((liquidityPool * 1 ether) / priceImpact >= nftValue * _amount, "Insufficient liquidity");
-                return true;
+        address royaltyReceiver = address(0);
+        uint256 royalty = 0;
+        if (_checkRoyaltyInterface(nftAddress)) {
+            (royaltyReceiver, royalty) = IERC2981(nftAddress).royaltyInfo(nftData.tokenId, totalValue);
+            // pay out max 10% royalty
+            if (royalty > totalValue / 10) {
+                royalty = totalValue / 10;
             }
+            registry.withdraw(royalty, royaltyReceiver);
+            emit RoyaltyPaid(royaltyReceiver, royalty);
         }
-        return false;
+        lockedEthCorrection -= int256(totalValue);
+        registry.safeTransferFrom(address(this), args.to, TokenType.ETH.id(), totalValue - royalty, "");
+        emit NFTSold(_msgSender(), args.to, nftValueAcc, args.amount);
+        return true;
+    }
+
+    /// @notice see {PiSwapLibrary-buyNFT}
+    function buyNFT(NFTSwap calldata args) external ensure(args.deadline, "buyNFT") nonReentrant returns (bool) {
+        uint256 nftValueAcc = nftValueAccumulated();
+        require(nftValueAcc <= args.slippage, _errMsg("buyNFT", "SLIPPAGE"));
+        registry.safeTransferFrom(_msgSender(), address(this), TokenType.ETH.id(), nftValueAcc * args.amount, "");
+        if (nftData.nftType == NFTType.ERC721) {
+            require(args.amount == 1, _errMsg("buyNFT", "INVALID_AMOUNT"));
+            IERC721_ NFT = IERC721_(nftData.tokenAddress);
+            NFT.safeTransferFrom(address(this), args.to, nftData.tokenId, "");
+        } else {
+            require(args.amount > 0, _errMsg("buyNFT", "INVALID_AMOUNT"));
+            IERC1155_ NFT = IERC1155_(nftData.tokenAddress);
+            NFT.safeTransferFrom(address(this), _msgSender(), nftData.tokenId, args.amount, "");
+        }
+        lockedEthCorrection += int256(nftValueAcc * args.amount);
+        emit NFTPurchased(_msgSender(), args.to, nftValueAcc, args.amount);
+        return true;
     }
 
     /// @notice see {PiSwapLibrary-depositedEth}
@@ -341,6 +272,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         reserve = registry.balanceOf(address(this), _tokenType.id());
         if (_tokenType.isEth()) {
             reserve -= depositedEth();
+            reserve = uint256(int256(reserve) - lockedEthCorrection);
         }
     }
 
@@ -392,7 +324,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     }
 
     /// @notice see {IPiSwapMarket-averageNftValue}
-    function lockedEth() public view returns (uint256 lockedEthForSwap) {
+    function lockedEth() public view returns (uint256) {
         uint256 lockedLiquidity = (getReserve(TokenType.LIQUIDITY) * 1 ether) / registry.totalSupply(TokenType.LIQUIDITY.id());
         assert(lockedLiquidity <= 1 ether);
         if (lockedLiquidity == 0) {
@@ -401,20 +333,22 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         (uint256 ethReserve, uint256 tokenReserve) = _getSwapReserves(TokenType.ETH, TokenType.BULL);
         uint256 lockedEthReserve = (ethReserve * lockedLiquidity) / 1 ether;
         uint256 lockedTokensReserve = (tokenReserve * lockedLiquidity) / 1 ether;
-        lockedEthForSwap = PiSwapLibrary.lockedEth(lockedEthReserve, lockedTokensReserve);
+        int256 lockedEthCorrected = int256(PiSwapLibrary.lockedEth(lockedEthReserve, lockedTokensReserve)) + lockedEthCorrection;
+        assert(lockedEthCorrected >= 0);
+        return uint256(lockedEthCorrected);
     }
 
     /// @notice see {IPiSwapMarket-nftValueAccumulated}
     function nftValueAccumulated() public view returns (uint256) {
         uint256 length = oracle.length;
         uint256 requiredLength = registry.oracleLength();
-        require(length >= requiredLength, _errMsg("oracle", "ORACLE_NOT_INITIALIZED"));
+        require(length >= requiredLength, _errMsg("oracle", "NOT_INITIALIZED"));
         return nftValueAvg(requiredLength);
     }
 
     /// @notice see {IPiSwapMarket-swapEnabled}
     function swapEnabled() public view returns (bool) {
-        return lockedEth() > nftValueAccumulated();
+        return _sufficientLiquidityForSwap(nftValueAccumulated(), 1);
     }
 
     /// @notice see {IPiSwapMarket-nftValueAvg}
@@ -437,6 +371,13 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         uint256 bullReserve = getReserve(TokenType.BULL);
         assert(bullReserve > 0);
         return ((getReserve(TokenType.BEAR) * 1 ether) / bullReserve)**2 / 1 ether;
+    }
+
+    /// @param _nftValueAcc accumulated nft value passed as parameter for gas savings, so it does not have to be recalculated during swap
+    /// @param _amountNfts  amount of nfts to swap
+    /// @return whether there is sufficient liquidity for swap
+    function _sufficientLiquidityForSwap(uint256 _nftValueAcc, uint256 _amountNfts) internal view returns (bool) {
+        return lockedEth() >= (_nftValueAcc * _amountNfts);
     }
 
     /// @dev if ETH is swapped, adjust the reserve to the BULL/BEAR ratio
@@ -466,6 +407,19 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
 
     function _errMsg(string memory _method, string memory _message) private pure returns (string memory) {
         return string(abi.encodePacked("PiSwapMarket#", _method, ": ", _message));
+    }
+
+    /// @dev check whether an NFT contract implements the ERC-2981 interface
+    /// @return false if ERC165 returns false or contract does not implement the ERC165 standard
+    function _checkRoyaltyInterface(address _contract) private view returns (bool) {
+        try IERC165(_contract).supportsInterface(0x2a55205a) returns (bool support) {
+            return support;
+        } catch (
+            bytes memory /*lowLevelData*/
+        ) {
+            // should not be reached because ERC721 and ERC1155 standards are required to implement the ERC165 standard
+            return false;
+        }
     }
 
     uint256[50] private __gap;

@@ -7,7 +7,6 @@ import "../interfaces/IWETH.sol";
 import "../interfaces/IPiSwapMarket.sol";
 import "../interfaces/IPiSwapRegistry.sol";
 import "@openzeppelin/contracts/token/ERC1155/utils/ERC1155Holder.sol";
-import "hardhat/console.sol";
 
 interface IPiSwapRouter01 {
     event Minted(address indexed market, address indexed sender, uint256 amountIn, uint256 amountOut);

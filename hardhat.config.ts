@@ -6,6 +6,7 @@ import 'hardhat-gas-reporter';
 import { HardhatUserConfig, task } from 'hardhat/config';
 import 'solidity-coverage';
 require('dotenv').config();
+require('hardhat-contract-sizer');
 
 const config: HardhatUserConfig = {
   defaultNetwork: 'hardhat',
@@ -38,7 +39,7 @@ const config: HardhatUserConfig = {
         settings: {
           optimizer: {
             enabled: true,
-            runs: 10000,
+            runs: 200,
           },
         },
       },

@@ -1,7 +1,7 @@
 import { BigNumber } from '@ethersproject/bignumber';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
-import { ethers } from 'hardhat';
+import { ethers, network } from 'hardhat';
 import { PiSwapMarket } from '../../typechain-types';
 import c from '../constants';
 import { PiSwap } from '../utils';
@@ -92,7 +92,7 @@ describe('Market', async () => {
 
     it('eth => bear swap', async () => {
       await registerPrice();
-      await p.router.swap(
+      const tx = p.router.swap(
         market.address,
         {
           amount: ethers.utils.parseEther('1'),
@@ -106,6 +106,7 @@ describe('Market', async () => {
         },
         true
       );
+      await expect(tx).to.emit(market, 'PriceRegistered');
       expect(await market.nftValue()).to.equal(oracle[oracle.length - 1]);
       expect(await market.nftValueAvg(oracle.length)).to.equal(oracleAvg());
     });
@@ -150,9 +151,14 @@ describe('Market', async () => {
       expect(await market.nftValueAvg(oracle.length)).to.equal(oracleAvg());
     });
 
-    it('bull => bear swap', async () => {
+    it('should register price before first transaction if multiple swaps performed in a single block', async () => {
       await registerPrice();
-      await p.router.swap(
+      await network.provider.request({
+        method: 'evm_setAutomine',
+        params: [false],
+      });
+
+      const tx1 = p.router.swap(
         market.address,
         {
           amount: ethers.utils.parseEther('100000'),
@@ -166,13 +172,8 @@ describe('Market', async () => {
         },
         true
       );
-      expect(await market.nftValue()).to.equal(oracle[oracle.length - 1]);
-      expect(await market.nftValueAvg(oracle.length)).to.equal(oracleAvg());
-    });
 
-    it('bear => bull swap', async () => {
-      await registerPrice();
-      await p.router.swap(
+      const tx2 = p.router.swap(
         market.address,
         {
           amount: ethers.utils.parseEther('100000'),
@@ -186,6 +187,20 @@ describe('Market', async () => {
         },
         true
       );
+      await network.provider.request({
+        method: 'evm_mine',
+        params: [],
+      });
+      await network.provider.request({
+        method: 'evm_setAutomine',
+        params: [true],
+      });
+      await network.provider.request({
+        method: 'evm_mine',
+        params: [],
+      });
+      await expect(tx1).to.emit(market, 'PriceRegistered');
+      await expect(tx2).to.not.emit(market, 'PriceRegistered');
       expect(await market.nftValue()).to.equal(oracle[oracle.length - 1]);
       expect(await market.nftValueAvg(oracle.length)).to.equal(oracleAvg());
     });
@@ -209,12 +224,12 @@ describe('Market', async () => {
       expect(await market.nftValue()).to.equal(oracle[oracle.length - 1]);
       expect(await market.nftValueAvg(oracle.length)).to.equal(oracleAvg());
       expect(await market.oracleLength()).to.equal(oracle.length);
-      await expect(market.swapEnabled()).to.be.revertedWith('PiSwapMarket#oracle: ORACLE_NOT_INITIALIZED');
-      await expect(market.nftValueAccumulated()).to.be.revertedWith('PiSwapMarket#oracle: ORACLE_NOT_INITIALIZED');
+      await expect(market.swapEnabled()).to.be.revertedWith('PiSwapMarket#oracle: NOT_INITIALIZED');
+      await expect(market.nftValueAccumulated()).to.be.revertedWith('PiSwapMarket#oracle: NOT_INITIALIZED');
     });
 
     it('should return values if oracle is initialized', async () => {
-      await p.registry.connect(accounts[8]).setOracleLength(7);
+      await p.registry.connect(accounts[8]).setOracleLength(6);
       expect(await market.swapEnabled()).to.be.true;
       expect(await market.nftValueAccumulated()).to.equal(oracleAvg());
     });

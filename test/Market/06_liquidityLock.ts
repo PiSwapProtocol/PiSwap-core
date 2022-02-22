@@ -49,6 +49,10 @@ describe('Market', async () => {
   });
 
   describe('Liquidity lock + locked ETH', async () => {
+    it('lockedEth should return zero if no liquidity is owned by the protocol', async () => {
+      expect(await market.lockedEth()).to.equal(0);
+    });
+
     it('should lock liquidity on eth => bull swap', async () => {
       const { reserveIn } = await p.getSwapReserves(market, c.tokenType.ETH, c.tokenType.BEAR);
       const liquiditySupply = await p.registry.totalSupply(liquidityId);
