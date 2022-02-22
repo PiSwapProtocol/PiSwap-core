@@ -89,10 +89,24 @@ interface IPiSwapMarket is Arguments {
         TokenType _tokenOut
     ) external view returns (uint256 amountIn);
 
+    /// @return amount of ETH locked that can be used for NFT swaps
+    function lockedEth() external view returns (uint256);
+
+    /// @return returns price that the NFT can be currently swapped for
+    /// @dev oracle period is fetched from registry contract
+    function nftValueAccumulated() external view returns (uint256);
+
+    /// @notice returns whether an NFT can currently be sold to the contract
+    function swapEnabled() external view returns (bool);
+
     /// @notice get the average NFT value for the last n snapshots
     /// @param amount of snapshots to average over
     /// @return average price
     function nftValueAvg(uint256 amount) external view returns (uint256);
+
+    /// @return current nftValue
+    /// @dev returns latest oracle entry, if oracle is initialized, else returns calculated value
+    function nftValue() external view returns (uint256);
 
     /// @return amount of price snapshots taken
     function oracleLength() external view returns (uint256);

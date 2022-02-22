@@ -391,6 +391,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         amountIn = (amountInWithoutFee * reserveIn) / (reserveIn - amountInWithoutFee);
     }
 
+    /// @notice see {IPiSwapMarket-averageNftValue}
     function lockedEth() public view returns (uint256 lockedEthForSwap) {
         uint256 lockedLiquidity = (getReserve(TokenType.LIQUIDITY) * 1 ether) / registry.totalSupply(TokenType.LIQUIDITY.id());
         assert(lockedLiquidity <= 1 ether);
@@ -403,6 +404,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         lockedEthForSwap = PiSwapLibrary.lockedEth(lockedEthReserve, lockedTokensReserve);
     }
 
+    /// @notice see {IPiSwapMarket-nftValueAccumulated}
     function nftValueAccumulated() public view returns (uint256) {
         uint256 length = oracle.length;
         uint256 requiredLength = registry.oracleLength();
@@ -410,15 +412,17 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         return nftValueAvg(requiredLength);
     }
 
+    /// @notice see {IPiSwapMarket-swapEnabled}
     function swapEnabled() public view returns (bool) {
         return lockedEth() > nftValueAccumulated();
     }
 
-    /// @notice see {IPiSwapMarket-averageNftValue}
+    /// @notice see {IPiSwapMarket-nftValueAvg}
     function nftValueAvg(uint256 amount) public view returns (uint256) {
         return oracle.avgPrice(amount);
     }
 
+    /// @notice see {IPiSwapMarket-nftValue}
     function nftValue() external view returns (uint256) {
         uint256 length = oracle.length;
         return length > 0 ? oracle[length - 1].price : _nftValue();
