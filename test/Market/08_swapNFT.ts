@@ -2,7 +2,7 @@ import { BigNumber } from '@ethersproject/bignumber';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { ERC1155, ERC721, PiSwapMarket, SampleERC1155Royalty, SampleERC721Royalty } from '../../typechain-types';
+import { ERC1155, ERC721, PiSwapMarket, MockERC1155Royalty, MockERC721Royalty } from '../../typechain-types';
 import c from '../constants';
 import { PiSwap } from '../utils';
 
@@ -12,137 +12,111 @@ describe('Market', async () => {
 
   const setup = async (market: PiSwapMarket) => {
     await p.weth.deposit({ value: ethers.utils.parseEther('200') });
-    await p.weth.approve(p.router.address, ethers.constants.MaxUint256);
     await p.weth.approve(p.registry.address, ethers.constants.MaxUint256);
-    await p.registry.setApprovalForAll(p.router.address, true);
+    await p.weth.approve(market.address, ethers.constants.MaxUint256);
     await p.registry.connect(accounts[8]).setOracleLength(7);
     await p.registry.deposit(ethers.utils.parseEther('10'));
 
-    await p.router.mint(
-      market.address,
-      {
-        amount: ethers.utils.parseEther('90'),
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      },
-      true
-    );
-    await p.router.addLiquidity(
-      market.address,
-      {
-        amountEth: ethers.utils.parseEther('4'),
-        minLiquidity: 0,
-        maxBull: ethers.utils.parseEther('500000'),
-        maxBear: ethers.utils.parseEther('500000'),
-        to: accounts[0].address,
-        deadline: c.unix2100,
-        userData: [],
-      },
-      true
-    );
-    await p.router.swap(
-      market.address,
-      {
-        amount: ethers.utils.parseEther('1'),
-        tokenIn: c.tokenType.ETH,
-        tokenOut: c.tokenType.BULL,
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      },
-      true
-    );
-    await p.router.swap(
-      market.address,
-      {
-        amount: ethers.utils.parseEther('1'),
-        tokenIn: c.tokenType.ETH,
-        tokenOut: c.tokenType.BEAR,
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      },
-      true
-    );
-    await p.router.swap(
-      market.address,
-      {
-        amount: ethers.utils.parseEther('100000'),
-        tokenIn: c.tokenType.BULL,
-        tokenOut: c.tokenType.ETH,
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      },
-      true
-    );
-    await p.router.swap(
-      market.address,
-      {
-        amount: ethers.utils.parseEther('100000'),
-        tokenIn: c.tokenType.BEAR,
-        tokenOut: c.tokenType.ETH,
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      },
-      true
-    );
+    await market.mint({
+      amount: ethers.utils.parseEther('90'),
+      kind: c.swapKind.GIVEN_IN,
+      useWeth: true,
+      to: accounts[0].address,
+      slippage: 0,
+      deadline: c.unix2100,
+      userData: [],
+    });
 
-    await p.router.swap(
-      market.address,
-      {
-        amount: ethers.utils.parseEther('100000'),
-        tokenIn: c.tokenType.BULL,
-        tokenOut: c.tokenType.BEAR,
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      },
-      true
-    );
-    await p.router.swap(
-      market.address,
-      {
-        amount: ethers.utils.parseEther('100000'),
-        tokenIn: c.tokenType.BEAR,
-        tokenOut: c.tokenType.BULL,
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      },
-      true
-    );
+    await market.addLiquidity({
+      amountEth: ethers.utils.parseEther('4'),
+      minLiquidity: 0,
+      maxBull: ethers.utils.parseEther('500000'),
+      maxBear: ethers.utils.parseEther('500000'),
+      useWeth: true,
+      to: accounts[0].address,
+      deadline: c.unix2100,
+      userData: [],
+    });
 
-    await p.router.swap(
-      market.address,
-      {
-        amount: ethers.utils.parseEther('10'),
-        tokenIn: c.tokenType.ETH,
-        tokenOut: c.tokenType.BULL,
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      },
-      true
-    );
+    await market.swap({
+      amount: ethers.utils.parseEther('1'),
+      tokenIn: c.tokenType.ETH,
+      tokenOut: c.tokenType.BULL,
+      kind: c.swapKind.GIVEN_IN,
+      useWeth: true,
+      to: accounts[0].address,
+      slippage: 0,
+      deadline: c.unix2100,
+      userData: [],
+    });
+    await market.swap({
+      amount: ethers.utils.parseEther('1'),
+      tokenIn: c.tokenType.ETH,
+      tokenOut: c.tokenType.BEAR,
+      kind: c.swapKind.GIVEN_IN,
+      useWeth: true,
+      to: accounts[0].address,
+      slippage: 0,
+      deadline: c.unix2100,
+      userData: [],
+    });
+    await market.swap({
+      amount: ethers.utils.parseEther('100000'),
+      tokenIn: c.tokenType.BULL,
+      tokenOut: c.tokenType.ETH,
+      kind: c.swapKind.GIVEN_IN,
+      useWeth: true,
+      to: accounts[0].address,
+      slippage: 0,
+      deadline: c.unix2100,
+      userData: [],
+    });
+    await market.swap({
+      amount: ethers.utils.parseEther('100000'),
+      tokenIn: c.tokenType.BEAR,
+      tokenOut: c.tokenType.ETH,
+      kind: c.swapKind.GIVEN_IN,
+      useWeth: true,
+      to: accounts[0].address,
+      slippage: 0,
+      deadline: c.unix2100,
+      userData: [],
+    });
+
+    await market.swap({
+      amount: ethers.utils.parseEther('100000'),
+      tokenIn: c.tokenType.BULL,
+      tokenOut: c.tokenType.BEAR,
+      kind: c.swapKind.GIVEN_IN,
+      useWeth: true,
+      to: accounts[0].address,
+      slippage: 0,
+      deadline: c.unix2100,
+      userData: [],
+    });
+    await market.swap({
+      amount: ethers.utils.parseEther('100000'),
+      tokenIn: c.tokenType.BEAR,
+      tokenOut: c.tokenType.BULL,
+      kind: c.swapKind.GIVEN_IN,
+      useWeth: true,
+      to: accounts[0].address,
+      slippage: 0,
+      deadline: c.unix2100,
+      userData: [],
+    });
+
+    await market.swap({
+      amount: ethers.utils.parseEther('10'),
+      tokenIn: c.tokenType.ETH,
+      tokenOut: c.tokenType.BULL,
+      kind: c.swapKind.GIVEN_IN,
+      useWeth: true,
+      to: accounts[0].address,
+      slippage: 0,
+      deadline: c.unix2100,
+      userData: [],
+    });
   };
 
   before(async () => {
@@ -174,6 +148,7 @@ describe('Market', async () => {
           const tx = market.sellNFT({
             amount: 1,
             slippage: 0,
+            useWeth: false,
             to: accounts[0].address,
             deadline: 0,
             userData: [],
@@ -184,6 +159,7 @@ describe('Market', async () => {
           const tx = market.sellNFT({
             amount: 0,
             slippage: 0,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -194,6 +170,7 @@ describe('Market', async () => {
           const tx = market.sellNFT({
             amount: 1,
             slippage: nftValue.add(1),
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -205,6 +182,7 @@ describe('Market', async () => {
           const tx = market.sellNFT({
             amount: 1,
             slippage: nftValue,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -229,6 +207,7 @@ describe('Market', async () => {
           const tx = market.sellNFT({
             amount: 1,
             slippage: nftValue,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -241,6 +220,7 @@ describe('Market', async () => {
           const tx = market.buyNFT({
             amount: 1,
             slippage: ethers.constants.MaxUint256,
+            useWeth: false,
             to: accounts[0].address,
             deadline: 0,
             userData: [],
@@ -251,6 +231,7 @@ describe('Market', async () => {
           const tx = market.buyNFT({
             amount: 1,
             slippage: nftValue.sub(1),
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -261,6 +242,7 @@ describe('Market', async () => {
           const tx = market.buyNFT({
             amount: 2,
             slippage: nftValue,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -269,26 +251,24 @@ describe('Market', async () => {
         });
         it('should be able to buy NFT with market profit', async () => {
           // last trade was a buy, so this will still increase the NFT price
-          await p.router.swap(
-            market.address,
-            {
-              amount: ethers.utils.parseEther('300000'),
-              tokenIn: c.tokenType.BULL,
-              tokenOut: c.tokenType.ETH,
-              kind: c.swapKind.GIVEN_IN,
-              to: accounts[0].address,
-              slippage: 0,
-              deadline: c.unix2100,
-              userData: [],
-            },
-            true
-          );
+          await market.swap({
+            amount: ethers.utils.parseEther('300000'),
+            tokenIn: c.tokenType.BULL,
+            tokenOut: c.tokenType.ETH,
+            kind: c.swapKind.GIVEN_IN,
+            useWeth: false,
+            to: accounts[0].address,
+            slippage: 0,
+            deadline: c.unix2100,
+            userData: [],
+          });
           lockedEth = await market.lockedEth();
           nftValue = await market.nftValueAccumulated();
           const reserveBefore = await market.getReserve(c.tokenType.ETH);
           const tx = market.buyNFT({
             amount: 1,
             slippage: nftValue,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -313,31 +293,30 @@ describe('Market', async () => {
           await market.sellNFT({
             amount: 1,
             slippage: nftValue,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
           });
           // register price change
-          await p.router.swap(
-            market.address,
-            {
-              amount: ethers.utils.parseEther('400000'),
-              tokenIn: c.tokenType.BULL,
-              tokenOut: c.tokenType.ETH,
-              kind: c.swapKind.GIVEN_IN,
-              to: accounts[0].address,
-              slippage: 0,
-              deadline: c.unix2100,
-              userData: [],
-            },
-            true
-          );
+          await market.swap({
+            amount: ethers.utils.parseEther('400000'),
+            tokenIn: c.tokenType.BULL,
+            tokenOut: c.tokenType.ETH,
+            kind: c.swapKind.GIVEN_IN,
+            useWeth: false,
+            to: accounts[0].address,
+            slippage: 0,
+            deadline: c.unix2100,
+            userData: [],
+          });
           lockedEth = await market.lockedEth();
           nftValue = await market.nftValueAccumulated();
           const reserveBefore = await market.getReserve(c.tokenType.ETH);
           const tx = market.buyNFT({
             amount: 1,
             slippage: nftValue,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -385,6 +364,7 @@ describe('Market', async () => {
           const tx = market.sellNFT({
             amount: 1,
             slippage: 0,
+            useWeth: false,
             to: accounts[0].address,
             deadline: 0,
             userData: [],
@@ -395,6 +375,7 @@ describe('Market', async () => {
           const tx = market.sellNFT({
             amount: 0,
             slippage: 0,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -405,6 +386,7 @@ describe('Market', async () => {
           const tx = market.sellNFT({
             amount: 1,
             slippage: nftValue.add(1),
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -416,6 +398,7 @@ describe('Market', async () => {
           const tx = market.sellNFT({
             amount: 1,
             slippage: nftValue,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -441,6 +424,7 @@ describe('Market', async () => {
           const tx = market.sellNFT({
             amount: 1,
             slippage: nftValue,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -453,6 +437,7 @@ describe('Market', async () => {
           const tx = market.buyNFT({
             amount: 1,
             slippage: ethers.constants.MaxUint256,
+            useWeth: false,
             to: accounts[0].address,
             deadline: 0,
             userData: [],
@@ -463,6 +448,7 @@ describe('Market', async () => {
           const tx = market.buyNFT({
             amount: 1,
             slippage: nftValue.sub(1),
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -473,34 +459,33 @@ describe('Market', async () => {
           const tx = market.buyNFT({
             amount: 0,
             slippage: nftValue,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
           });
-          await expect(tx).to.be.revertedWith('PiSwapMarket#buyNFT: INVALID_AMOUNT');
+          await expect(tx).to.be.revertedWith('PiSwapMarket#onERC1155Received: AMOUNT_ZERO');
         });
         it('should be able to buy NFT with market profit', async () => {
           // last trade was a buy, so this will still increase the NFT price
-          await p.router.swap(
-            market.address,
-            {
-              amount: ethers.utils.parseEther('300000'),
-              tokenIn: c.tokenType.BULL,
-              tokenOut: c.tokenType.ETH,
-              kind: c.swapKind.GIVEN_IN,
-              to: accounts[0].address,
-              slippage: 0,
-              deadline: c.unix2100,
-              userData: [],
-            },
-            true
-          );
+          await market.swap({
+            amount: ethers.utils.parseEther('300000'),
+            tokenIn: c.tokenType.BULL,
+            tokenOut: c.tokenType.ETH,
+            kind: c.swapKind.GIVEN_IN,
+            useWeth: false,
+            to: accounts[0].address,
+            slippage: 0,
+            deadline: c.unix2100,
+            userData: [],
+          });
           lockedEth = await market.lockedEth();
           nftValue = await market.nftValueAccumulated();
           const reserveBefore = await market.getReserve(c.tokenType.ETH);
           const tx = market.buyNFT({
             amount: 1,
             slippage: nftValue,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -528,31 +513,30 @@ describe('Market', async () => {
           await market.sellNFT({
             amount: 1,
             slippage: nftValue,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
           });
           // register price change
-          await p.router.swap(
-            market.address,
-            {
-              amount: ethers.utils.parseEther('400000'),
-              tokenIn: c.tokenType.BULL,
-              tokenOut: c.tokenType.ETH,
-              kind: c.swapKind.GIVEN_IN,
-              to: accounts[0].address,
-              slippage: 0,
-              deadline: c.unix2100,
-              userData: [],
-            },
-            true
-          );
+          await market.swap({
+            amount: ethers.utils.parseEther('400000'),
+            tokenIn: c.tokenType.BULL,
+            tokenOut: c.tokenType.ETH,
+            kind: c.swapKind.GIVEN_IN,
+            useWeth: false,
+            to: accounts[0].address,
+            slippage: 0,
+            deadline: c.unix2100,
+            userData: [],
+          });
           lockedEth = await market.lockedEth();
           nftValue = await market.nftValueAccumulated();
           const reserveBefore = await market.getReserve(c.tokenType.ETH);
           const tx = market.buyNFT({
             amount: 1,
             slippage: nftValue,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -586,6 +570,7 @@ describe('Market', async () => {
           const tx = market.sellNFT({
             amount: 2,
             slippage: nftValue,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -611,6 +596,7 @@ describe('Market', async () => {
           const tx = market.buyNFT({
             amount: 2,
             slippage: nftValue,
+            useWeth: false,
             to: accounts[0].address,
             deadline: c.unix2100,
             userData: [],
@@ -637,14 +623,14 @@ describe('Market', async () => {
     });
 
     describe('Royalty', async () => {
-      let erc721: SampleERC721Royalty;
-      let erc1155: SampleERC1155Royalty;
+      let erc721: MockERC721Royalty;
+      let erc1155: MockERC1155Royalty;
       let market721: PiSwapMarket;
       let market1155: PiSwapMarket;
 
       before(async () => {
-        (erc721 = await (await ethers.getContractFactory('SampleERC721Royalty')).deploy('Test Token', 'TST', '')),
-          (erc1155 = await (await ethers.getContractFactory('SampleERC1155Royalty')).deploy()),
+        (erc721 = await (await ethers.getContractFactory('MockERC721Royalty')).deploy('Test Token', 'TST', '')),
+          (erc1155 = await (await ethers.getContractFactory('MockERC1155Royalty')).deploy()),
           (market721 = await p.deployMarket({ address: erc721.address, tokenId: '0' }));
         market1155 = await p.deployMarket({ address: erc1155.address, tokenId: '0' });
         await erc721.setApprovalForAll(market721.address, true);
@@ -660,6 +646,7 @@ describe('Market', async () => {
         const tx = market721.sellNFT({
           amount: 1,
           slippage: nftValue,
+          useWeth: false,
           to: accounts[0].address,
           deadline: c.unix2100,
           userData: [],
@@ -686,6 +673,7 @@ describe('Market', async () => {
         const tx = market1155.sellNFT({
           amount: 1,
           slippage: nftValue,
+          useWeth: false,
           to: accounts[0].address,
           deadline: c.unix2100,
           userData: [],
@@ -704,6 +692,54 @@ describe('Market', async () => {
             nftValue.sub(royalty)
           );
       });
+    });
+  });
+
+  describe('Transfer restrictions', async () => {
+    let market1: PiSwapMarket;
+    let market2: PiSwapMarket;
+    let erc721_1: ERC721;
+    let erc721_2: ERC721;
+    let erc1155_1: ERC1155;
+    let erc1155_2: ERC1155;
+
+    before(async () => {
+      erc721_1 = await p.deployERC721();
+      erc721_2 = await p.deployERC721();
+      erc1155_1 = await p.deployERC1155();
+      erc1155_2 = await p.deployERC1155();
+      market1 = await p.deployMarket({ address: erc721_1.address, tokenId: '0' });
+      market2 = await p.deployMarket({ address: erc1155_1.address, tokenId: '0' });
+    });
+
+    it('should only accept correct NFT type', async () => {
+      await expect(
+        erc721_2['safeTransferFrom(address,address,uint256)'](accounts[0].address, market2.address, 0)
+      ).to.be.revertedWith('PiSwapMarket#onERC721Received: INVALID_NFT_TYPE');
+      await expect(erc1155_2.safeTransferFrom(accounts[0].address, market1.address, 0, 1, [])).to.be.revertedWith(
+        'PiSwapMarket#onERC1155Received: INVALID_NFT_TYPE'
+      );
+    });
+    it('should only accept NFTs from correct contract address', async () => {
+      await expect(
+        erc721_2['safeTransferFrom(address,address,uint256)'](accounts[0].address, market1.address, 0)
+      ).to.be.revertedWith('PiSwapMarket#onERC721Received: INVALID_NFT_CONTRACT');
+      await expect(erc1155_2.safeTransferFrom(accounts[0].address, market2.address, 0, 1, [])).to.be.revertedWith(
+        'PiSwapMarket#onERC1155Received: INVALID_NFT_CONTRACT'
+      );
+    });
+    it('should only accept NFTs with correct token Id', async () => {
+      await expect(
+        erc721_1['safeTransferFrom(address,address,uint256)'](accounts[0].address, market1.address, 1)
+      ).to.be.revertedWith('PiSwapMarket#onERC721Received: INVALID_TOKEN_ID');
+      await expect(erc1155_1.safeTransferFrom(accounts[0].address, market2.address, 1, 1, [])).to.be.revertedWith(
+        'PiSwapMarket#onERC1155Received: INVALID_TOKEN_ID'
+      );
+    });
+    it('should not accept batch transfers', async () => {
+      await expect(
+        erc1155_1.safeBatchTransferFrom(accounts[0].address, market2.address, [1], [1], [])
+      ).to.be.revertedWith('PiSwapMarket#onERC1155BatchReceived: BATCH_TRANSFER_DISALLOWED');
     });
   });
 });

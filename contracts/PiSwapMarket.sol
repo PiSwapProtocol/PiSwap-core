@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.11;
 
+// interfaces
 import "./interfaces/IPiSwapMarket.sol";
 import "./interfaces/IERC2981.sol";
-import "./lib/PiSwapLibrary.sol";
-
-import "./lib/Oracle.sol";
+import "./interfaces/IWETH.sol";
+// libraries
+import "./lib/market/PiSwapLibrary.sol";
+import "./lib/market/Oracle.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+// base contracts
+import "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC721/utils/ERC721HolderUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/utils/ERC1155HolderUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
 
 struct NFTData {
     uint256 tokenId;
@@ -18,27 +22,28 @@ struct NFTData {
     NFTType nftType;
 }
 
-contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721HolderUpgradeable, ReentrancyGuardUpgradeable, IPiSwapMarket {
+contract PiSwapMarket is ContextUpgradeable, ReentrancyGuardUpgradeable, ERC1155HolderUpgradeable, ERC721HolderUpgradeable, IPiSwapMarket {
     using OracleLib for PriceSnapshot[];
     using TokenTypeLib for TokenType;
     using SwapKindLib for SwapKind;
+    using SafeERC20 for IWETH;
 
     IRegistry public registry;
     NFTData public nftData;
     PriceSnapshot[] public oracle;
     int256 internal lockedEthCorrection;
 
-    modifier ensure(uint256 _deadline, string memory _method) {
-        require(block.timestamp < _deadline, _errMsg(_method, "EXPIRED"));
+    modifier ensure(uint256 deadline, string memory method) {
+        require(block.timestamp < deadline, _errMsg(method, "EXPIRED"));
         _;
     }
 
     /// @notice on every ETH / Token swap lock half of the fee
-    modifier lockLiquidity(TokenType _tokenIn, TokenType _tokenOut) {
-        require(_tokenIn != TokenType.LIQUIDITY && _tokenOut != TokenType.LIQUIDITY, _errMsg("swap", "LIQUIDITY_TOKEN_SWAP"));
-        require(_tokenIn != _tokenOut, _errMsg("swap", "EQUAL_TOKEN_IN_OUT"));
+    modifier lockLiquidity(TokenType tokenIn, TokenType tokenOut) {
+        require(tokenIn != TokenType.LIQUIDITY && tokenOut != TokenType.LIQUIDITY, _errMsg("swap", "LIQUIDITY_TOKEN_SWAP"));
+        require(tokenIn != tokenOut, _errMsg("swap", "EQUAL_TOKEN_IN_OUT"));
         // sort tokens and check if ETH is traded, invert BULL/BEAR to track added liquidity
-        (TokenType ethToken, TokenType nonTradedToken) = _tokenIn < _tokenOut ? (_tokenIn, _tokenOut.invert()) : (_tokenOut, _tokenIn.invert());
+        (TokenType ethToken, TokenType nonTradedToken) = tokenIn < tokenOut ? (tokenIn, tokenOut.invert()) : (tokenOut, tokenIn.invert());
         if (ethToken.isEth()) {
             (uint256 reserveBefore, ) = _getSwapReserves(ethToken, nonTradedToken);
             _;
@@ -55,22 +60,30 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     }
 
     function initialize(
-        address _tokenAddress,
-        uint256 _tokenId,
-        NFTType _nftType
+        address tokenAddress,
+        uint256 tokenId,
+        NFTType nftType
     ) public initializer {
         __ERC1155Holder_init();
         __ERC721Holder_init();
         __ReentrancyGuard_init();
         registry = IRegistry(_msgSender());
-        nftData = NFTData(_tokenId, _tokenAddress, _nftType);
+        nftData = NFTData(tokenId, tokenAddress, nftType);
+        // approve MAX_UINT on initialization for gas costs,
+        // total supply of ethereum would have to be deposited over 1e50 times
+        // for the approved amount to become insufficient
+        IWETH WETH = IWETH(registry.WETH());
+        WETH.approve(_msgSender(), type(uint256).max);
     }
 
     /// @notice see {IPiSwapMarket-mint}
-    function mint(Arguments.Mint calldata args) external ensure(args.deadline, "mint") nonReentrant returns (uint256 amountIn, uint256 amountOut) {
-        require(args.amount != 0, _errMsg("mint", "AMOUNT_ZERO"));
+    function mint(Arguments.Mint calldata args)
+        external
+        ensure(args.deadline, "mint")
+        nonReentrant
+        returns (uint256 amountIn, uint256 amountOut)
+    {
         uint256 fee;
-
         if (args.kind.givenIn()) {
             amountIn = args.amount;
             fee = (amountIn * registry.fee()) / 10000;
@@ -84,16 +97,20 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
             require(amountIn <= args.slippage, _errMsg("mint", "SLIPPAGE"));
         }
 
-        registry.safeTransferFrom(_msgSender(), address(this), TokenType.ETH.id(), amountIn, "");
-        if (fee != 0) registry.safeTransferFrom(address(this), registry.beneficiary(), 0, fee, "");
+        _deposit(TokenType.ETH, amountIn, args.useWeth);
+        if (fee != 0) registry.withdraw(fee, registry.beneficiary());
         registry.mint(args.to, amountOut, TokenType.BULL);
         registry.mint(args.to, amountOut, TokenType.BEAR);
         emit Minted(_msgSender(), args.to, amountIn, amountOut);
     }
 
     /// @notice see {IPiSwapMarket-burn}
-    function burn(Arguments.Burn calldata args) external ensure(args.deadline, "burn") nonReentrant returns (uint256 amountIn, uint256 amountOut) {
-        require(args.amount != 0, _errMsg("burn", "AMOUNT_ZERO"));
+    function burn(Arguments.Burn calldata args)
+        external
+        ensure(args.deadline, "burn")
+        nonReentrant
+        returns (uint256 amountIn, uint256 amountOut)
+    {
         uint256 fee;
 
         if (args.kind.givenIn()) {
@@ -112,8 +129,8 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
 
         registry.burn(_msgSender(), amountIn, TokenType.BULL);
         registry.burn(_msgSender(), amountIn, TokenType.BEAR);
-        if (fee != 0) registry.safeTransferFrom(address(this), registry.beneficiary(), TokenType.ETH.id(), fee, "");
-        registry.safeTransferFrom(address(this), args.to, 0, amountOut, "");
+        if (fee != 0) registry.withdraw(fee, registry.beneficiary());
+        _withdraw(TokenType.ETH, amountOut, args.useWeth, args.to);
         emit Burned(_msgSender(), args.to, amountIn, amountOut);
     }
 
@@ -137,8 +154,11 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
             amountBull = (totalTokenAmount * bullReserve) / totalTokenReserve;
             amountBear = totalTokenAmount - amountBull;
             liquidityMinted = (args.amountEth * liquiditySupply) / ethReserve;
-            require(liquidityMinted >= args.minLiquidity && args.maxBull >= amountBull && args.maxBear >= amountBear, _errMsg("addLiquidity", "SLIPPAGE"));
-            registry.safeTransferFrom(_msgSender(), address(this), TokenType.ETH.id(), args.amountEth, "");
+            require(
+                liquidityMinted >= args.minLiquidity && args.maxBull >= amountBull && args.maxBear >= amountBear,
+                _errMsg("addLiquidity", "SLIPPAGE")
+            );
+            _deposit(TokenType.ETH, args.amountEth, args.useWeth);
             registry.safeTransferFrom(_msgSender(), address(this), TokenType.BULL.id(), amountBull, "");
             registry.safeTransferFrom(_msgSender(), address(this), TokenType.BEAR.id(), amountBear, "");
             registry.mint(args.to, liquidityMinted, TokenType.LIQUIDITY);
@@ -149,7 +169,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
             amountBull = args.maxBull;
             amountBear = args.maxBear;
             require(args.amountEth != 0 && amountBull != 0 && amountBear != 0, _errMsg("addLiquidity", "INSUFFICIENT_AMOUNT"));
-            registry.safeTransferFrom(_msgSender(), address(this), TokenType.ETH.id(), args.amountEth, "");
+            _deposit(TokenType.ETH, args.amountEth, args.useWeth);
             registry.safeTransferFrom(_msgSender(), address(this), TokenType.BULL.id(), args.maxBull, "");
             registry.safeTransferFrom(_msgSender(), address(this), TokenType.BEAR.id(), args.maxBear, "");
             registry.mint(args.to, liquidityMinted, TokenType.LIQUIDITY);
@@ -159,7 +179,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
 
     /// @notice see {IPiSwapMarket-removeLiquidity}
     function removeLiquidity(Arguments.RemoveLiquidity calldata args)
-        public
+        external
         ensure(args.deadline, "removeLiquidity")
         nonReentrant
         returns (
@@ -174,10 +194,13 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         amountEth = (getReserve(TokenType.ETH) * args.amountLiquidity) / liquiditySupply;
         amountBull = (getReserve(TokenType.BULL) * args.amountLiquidity) / liquiditySupply;
         amountBear = (getReserve(TokenType.BEAR) * args.amountLiquidity) / liquiditySupply;
-        require(amountEth >= args.minEth && amountBull >= args.minBull && amountBear >= args.minBear, _errMsg("removeLiquidity", "SLIPPAGE"));
+        require(
+            amountEth >= args.minEth && amountBull >= args.minBull && amountBear >= args.minBear,
+            _errMsg("removeLiquidity", "SLIPPAGE")
+        );
 
         registry.burn(_msgSender(), args.amountLiquidity, TokenType.LIQUIDITY);
-        registry.safeTransferFrom(address(this), args.to, TokenType.ETH.id(), amountEth, "");
+        _withdraw(TokenType.ETH, amountEth, args.useWeth, args.to);
         registry.safeTransferFrom(address(this), args.to, TokenType.BULL.id(), amountBull, "");
         registry.safeTransferFrom(address(this), args.to, TokenType.BEAR.id(), amountBear, "");
         emit LiquidityRemoved(_msgSender(), args.to, args.amountLiquidity, amountEth, amountBull, amountBear);
@@ -202,8 +225,8 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
             amountIn = swapInGivenOut(amountOut, args.tokenIn, args.tokenOut);
             require(amountIn <= args.slippage, _errMsg("swap", "SLIPPAGE"));
         }
-        registry.safeTransferFrom(_msgSender(), address(this), args.tokenIn.id(), amountIn, "");
-        registry.safeTransferFrom(address(this), args.to, args.tokenOut.id(), amountOut, "");
+        _deposit(args.tokenIn, amountIn, args.useWeth);
+        _withdraw(args.tokenOut, amountOut, args.useWeth, args.to);
         emit Swapped(_msgSender(), args.to, args.tokenIn, args.tokenOut, amountIn, amountOut);
     }
 
@@ -235,7 +258,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
             emit RoyaltyPaid(royaltyReceiver, royalty);
         }
         lockedEthCorrection -= int256(totalValue);
-        registry.safeTransferFrom(address(this), args.to, TokenType.ETH.id(), totalValue - royalty, "");
+        _withdraw(TokenType.ETH, totalValue - royalty, args.useWeth, args.to);
         emit NFTSold(_msgSender(), args.to, nftValueAcc, args.amount);
         return true;
     }
@@ -244,13 +267,12 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     function buyNFT(NFTSwap calldata args) external ensure(args.deadline, "buyNFT") nonReentrant returns (bool) {
         uint256 nftValueAcc = nftValueAccumulated();
         require(nftValueAcc <= args.slippage, _errMsg("buyNFT", "SLIPPAGE"));
-        registry.safeTransferFrom(_msgSender(), address(this), TokenType.ETH.id(), nftValueAcc * args.amount, "");
+        _deposit(TokenType.ETH, nftValueAcc * args.amount, args.useWeth);
         if (nftData.nftType == NFTType.ERC721) {
             require(args.amount == 1, _errMsg("buyNFT", "INVALID_AMOUNT"));
             IERC721_ NFT = IERC721_(nftData.tokenAddress);
             NFT.safeTransferFrom(address(this), args.to, nftData.tokenId, "");
         } else {
-            require(args.amount > 0, _errMsg("buyNFT", "INVALID_AMOUNT"));
             IERC1155_ NFT = IERC1155_(nftData.tokenAddress);
             NFT.safeTransferFrom(address(this), _msgSender(), nftData.tokenId, args.amount, "");
         }
@@ -268,57 +290,57 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     /// @notice returns reserve
     /// @dev if ETH, balance of contract is subtracted by the deposited ETH
     /// @dev if LIQUIDITY, reserve is amount of locked liquidity tokens
-    function getReserve(TokenType _tokenType) public view returns (uint256 reserve) {
-        reserve = registry.balanceOf(address(this), _tokenType.id());
-        if (_tokenType.isEth()) {
+    function getReserve(TokenType tokenType) public view returns (uint256 reserve) {
+        reserve = registry.balanceOf(address(this), tokenType.id());
+        if (tokenType.isEth()) {
             reserve -= depositedEth();
             reserve = uint256(int256(reserve) - lockedEthCorrection);
         }
     }
 
     /// @notice see {IPiSwapMarket-mintOutGivenIn}
-    function mintOutGivenIn(uint256 _amountIn) public view returns (uint256 amountOut) {
+    function mintOutGivenIn(uint256 amountIn) public view returns (uint256 amountOut) {
         uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
-        amountOut = PiSwapLibrary.mintOutGivenIn(currentSupply, _amountIn);
+        amountOut = PiSwapLibrary.mintOutGivenIn(currentSupply, amountIn);
     }
 
     /// @notice see {IPiSwapMarket-mintInGivenOut}
-    function mintInGivenOut(uint256 _amountOut) public view returns (uint256 amountIn) {
+    function mintInGivenOut(uint256 amountOut) public view returns (uint256 amountIn) {
         uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
-        amountIn = PiSwapLibrary.mintInGivenOut(currentSupply, _amountOut);
+        amountIn = PiSwapLibrary.mintInGivenOut(currentSupply, amountOut);
     }
 
     /// @notice see {IPiSwapMarket-burnOutGivenIn}
-    function burnOutGivenIn(uint256 _amountIn) public view returns (uint256 amountOut) {
+    function burnOutGivenIn(uint256 amountIn) public view returns (uint256 amountOut) {
         uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
-        amountOut = PiSwapLibrary.burnOutGivenIn(currentSupply, _amountIn);
+        amountOut = PiSwapLibrary.burnOutGivenIn(currentSupply, amountIn);
     }
 
     /// @notice see {IPiSwapMarket-burnInGivenOut}
-    function burnInGivenOut(uint256 _amountOut) public view returns (uint256 amountIn) {
+    function burnInGivenOut(uint256 amountOut) public view returns (uint256 amountIn) {
         uint256 currentSupply = registry.totalSupply(TokenType.BULL.id());
-        amountIn = PiSwapLibrary.burnInGivenOut(currentSupply, _amountOut);
+        amountIn = PiSwapLibrary.burnInGivenOut(currentSupply, amountOut);
     }
 
     /// @notice see {IPiSwapMarket-swapOutGivenIn}
     function swapOutGivenIn(
-        uint256 _amountIn,
-        TokenType _tokenIn,
-        TokenType _tokenOut
+        uint256 amountIn,
+        TokenType tokenIn,
+        TokenType tokenOut
     ) public view returns (uint256 amountOut) {
-        (uint256 reserveIn, uint256 reserveOut) = _getSwapReserves(_tokenIn, _tokenOut);
-        uint256 amountInWithFee = (_amountIn * reserveIn) / (_amountIn + reserveIn);
+        (uint256 reserveIn, uint256 reserveOut) = _getSwapReserves(tokenIn, tokenOut);
+        uint256 amountInWithFee = (amountIn * reserveIn) / (amountIn + reserveIn);
         amountOut = PiSwapLibrary.swapOutGivenIn(reserveIn, reserveOut, amountInWithFee);
     }
 
     /// @notice see {IPiSwapMarket-swapInGivenOut}
     function swapInGivenOut(
-        uint256 _amountOut,
-        TokenType _tokenIn,
-        TokenType _tokenOut
+        uint256 amountOut,
+        TokenType tokenIn,
+        TokenType tokenOut
     ) public view returns (uint256 amountIn) {
-        (uint256 reserveIn, uint256 reserveOut) = _getSwapReserves(_tokenIn, _tokenOut);
-        uint256 amountInWithoutFee = PiSwapLibrary.swapInGivenOut(reserveIn, reserveOut, _amountOut);
+        (uint256 reserveIn, uint256 reserveOut) = _getSwapReserves(tokenIn, tokenOut);
+        uint256 amountInWithoutFee = PiSwapLibrary.swapInGivenOut(reserveIn, reserveOut, amountOut);
         require(reserveIn > amountInWithoutFee, _errMsg("swap", "MAX_IN"));
         amountIn = (amountInWithoutFee * reserveIn) / (reserveIn - amountInWithoutFee);
     }
@@ -327,9 +349,7 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
     function lockedEth() public view returns (uint256) {
         uint256 lockedLiquidity = (getReserve(TokenType.LIQUIDITY) * 1 ether) / registry.totalSupply(TokenType.LIQUIDITY.id());
         assert(lockedLiquidity <= 1 ether);
-        if (lockedLiquidity == 0) {
-            return 0;
-        }
+        if (lockedLiquidity == 0) return 0;
         (uint256 ethReserve, uint256 tokenReserve) = _getSwapReserves(TokenType.ETH, TokenType.BULL);
         uint256 lockedEthReserve = (ethReserve * lockedLiquidity) / 1 ether;
         uint256 lockedTokensReserve = (tokenReserve * lockedLiquidity) / 1 ether;
@@ -367,36 +387,63 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         return oracle.length;
     }
 
-    function _nftValue() internal view returns (uint256) {
+    function _nftValue() private view returns (uint256) {
         uint256 bullReserve = getReserve(TokenType.BULL);
         assert(bullReserve > 0);
         return ((getReserve(TokenType.BEAR) * 1 ether) / bullReserve)**2 / 1 ether;
     }
 
-    /// @param _nftValueAcc accumulated nft value passed as parameter for gas savings, so it does not have to be recalculated during swap
-    /// @param _amountNfts  amount of nfts to swap
+    /// @param nftValueAcc accumulated nft value passed as parameter for gas savings, so it does not have to be recalculated during swap
+    /// @param amountNfts  amount of nfts to swap
     /// @return whether there is sufficient liquidity for swap
-    function _sufficientLiquidityForSwap(uint256 _nftValueAcc, uint256 _amountNfts) internal view returns (bool) {
-        return lockedEth() >= (_nftValueAcc * _amountNfts);
+    function _sufficientLiquidityForSwap(uint256 nftValueAcc, uint256 amountNfts) private view returns (bool) {
+        return lockedEth() >= (nftValueAcc * amountNfts);
     }
 
     /// @dev if ETH is swapped, adjust the reserve to the BULL/BEAR ratio
-    function _getSwapReserves(TokenType _tokenIn, TokenType _tokenOut) internal view returns (uint256 reserveIn, uint256 reserveOut) {
-        reserveIn = getReserve(_tokenIn);
-        reserveOut = getReserve(_tokenOut);
+    function _getSwapReserves(TokenType tokenIn, TokenType tokenOut) private view returns (uint256 reserveIn, uint256 reserveOut) {
+        reserveIn = getReserve(tokenIn);
+        reserveOut = getReserve(tokenOut);
         require(reserveIn > 0 && reserveOut > 0, _errMsg("swap", "NOT_INITIALIZED"));
-        if (_tokenIn.isEth()) {
-            uint256 otherReserve = getReserve(_tokenOut.invert());
+        if (tokenIn.isEth()) {
+            uint256 otherReserve = getReserve(tokenOut.invert());
             reserveIn = (reserveIn * otherReserve) / (reserveOut + otherReserve);
-        } else if (_tokenOut.isEth()) {
-            uint256 otherReserve = getReserve(_tokenIn.invert());
+        } else if (tokenOut.isEth()) {
+            uint256 otherReserve = getReserve(tokenIn.invert());
             reserveOut = (reserveOut * otherReserve) / (reserveIn + otherReserve);
         }
     }
 
+    function _deposit(
+        TokenType tokenType,
+        uint256 amount,
+        bool deposit
+    ) private {
+        if (tokenType.isEth() && deposit) {
+            IWETH WETH = IWETH(registry.WETH());
+            WETH.safeTransferFrom(_msgSender(), address(this), amount);
+            registry.deposit(amount);
+        } else {
+            registry.safeTransferFrom(_msgSender(), address(this), tokenType.id(), amount, "");
+        }
+    }
+
+    function _withdraw(
+        TokenType tokenType,
+        uint256 amount,
+        bool withdraw,
+        address to
+    ) private {
+        if (tokenType.isEth() && withdraw) {
+            registry.withdraw(amount, to);
+        } else {
+            registry.safeTransferFrom(address(this), to, tokenType.id(), amount, "");
+        }
+    }
+
     /// @notice register the current NFT price
-    /// @dev called before any trade is executed in a block, this way
-    function _registerPrice() internal {
+    /// @dev called before any trade is executed in a block, this way flash loans can't manipulate the price within a single transaction
+    function _registerPrice() private {
         uint256 length = oracle.length;
         if (length == 0 || oracle[length - 1].timestamp < block.timestamp) {
             uint256 price = _nftValue();
@@ -405,14 +452,10 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
         }
     }
 
-    function _errMsg(string memory _method, string memory _message) private pure returns (string memory) {
-        return string(abi.encodePacked("PiSwapMarket#", _method, ": ", _message));
-    }
-
     /// @dev check whether an NFT contract implements the ERC-2981 interface
     /// @return false if ERC165 returns false or contract does not implement the ERC165 standard
-    function _checkRoyaltyInterface(address _contract) private view returns (bool) {
-        try IERC165(_contract).supportsInterface(0x2a55205a) returns (bool support) {
+    function _checkRoyaltyInterface(address contract_) private view returns (bool) {
+        try IERC165(contract_).supportsInterface(0x2a55205a) returns (bool support) {
             return support;
         } catch (
             bytes memory /*lowLevelData*/
@@ -420,6 +463,62 @@ contract PiSwapMarket is ContextUpgradeable, ERC1155HolderUpgradeable, ERC721Hol
             // should not be reached because ERC721 and ERC1155 standards are required to implement the ERC165 standard
             return false;
         }
+    }
+
+    function _errMsg(string memory method, string memory message) private pure returns (string memory) {
+        return string(abi.encodePacked("PiSwapMarket#", method, ": ", message));
+    }
+
+    /**
+        Override received functions to only accept 
+            - ETH, BULL, BEAR, LIQUIDITY tokens of this market
+            - The underlying NFT
+     */
+
+    function onERC1155Received(
+        address,
+        address,
+        uint256 tokenId,
+        uint256 value,
+        bytes memory
+    ) public virtual override returns (bytes4) {
+        if (msg.sender == address(registry)) {
+            require(
+                tokenId == TokenType.ETH.id() ||
+                    tokenId == TokenType.BULL.id() ||
+                    tokenId == TokenType.BEAR.id() ||
+                    tokenId == TokenType.LIQUIDITY.id(),
+                _errMsg("onERC1155Received", "INVALID_TOKEN")
+            );
+            require(value != 0, _errMsg("onERC1155Received", "AMOUNT_ZERO"));
+        } else {
+            require(nftData.nftType == NFTType.ERC1155, _errMsg("onERC1155Received", "INVALID_NFT_TYPE"));
+            require(msg.sender == nftData.tokenAddress, _errMsg("onERC1155Received", "INVALID_NFT_CONTRACT"));
+            require(tokenId == nftData.tokenId, _errMsg("onERC1155Received", "INVALID_TOKEN_ID"));
+        }
+        return this.onERC1155Received.selector;
+    }
+
+    function onERC1155BatchReceived(
+        address,
+        address,
+        uint256[] memory,
+        uint256[] memory,
+        bytes memory
+    ) public virtual override returns (bytes4) {
+        revert(_errMsg("onERC1155BatchReceived", "BATCH_TRANSFER_DISALLOWED"));
+    }
+
+    function onERC721Received(
+        address,
+        address,
+        uint256 tokenId,
+        bytes memory
+    ) public virtual override returns (bytes4) {
+        require(nftData.nftType == NFTType.ERC721, _errMsg("onERC721Received", "INVALID_NFT_TYPE"));
+        require(msg.sender == nftData.tokenAddress, _errMsg("onERC721Received", "INVALID_NFT_CONTRACT"));
+        require(tokenId == nftData.tokenId, _errMsg("onERC721Received", "INVALID_TOKEN_ID"));
+        return this.onERC721Received.selector;
     }
 
     uint256[50] private __gap;

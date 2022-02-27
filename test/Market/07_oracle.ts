@@ -34,35 +34,30 @@ describe('Market', async () => {
     accounts = await ethers.getSigners();
     p = await PiSwap.create(accounts[8].address);
     market = await p.deplyoMarketERC721();
-    await p.weth.deposit({ value: ethers.utils.parseEther('200') });
-    await p.weth.approve(p.router.address, ethers.constants.MaxUint256);
-    await p.registry.setApprovalForAll(p.router.address, true);
 
-    await p.router.mint(
-      market.address,
-      {
-        amount: ethers.utils.parseEther('90'),
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      },
-      true
-    );
-    await p.router.addLiquidity(
-      market.address,
-      {
-        amountEth: ethers.utils.parseEther('4'),
-        minLiquidity: 0,
-        maxBull: ethers.utils.parseEther('500000'),
-        maxBear: ethers.utils.parseEther('500000'),
-        to: accounts[0].address,
-        deadline: c.unix2100,
-        userData: [],
-      },
-      true
-    );
+    await p.weth.deposit({ value: ethers.utils.parseEther('200') });
+    await p.weth.approve(market.address, ethers.constants.MaxUint256);
+
+    await market.mint({
+      amount: ethers.utils.parseEther('90'),
+      kind: c.swapKind.GIVEN_IN,
+      useWeth: true,
+      to: accounts[0].address,
+      slippage: 0,
+      deadline: c.unix2100,
+      userData: [],
+    });
+
+    await market.addLiquidity({
+      amountEth: ethers.utils.parseEther('4'),
+      minLiquidity: 0,
+      maxBull: ethers.utils.parseEther('500000'),
+      maxBear: ethers.utils.parseEther('500000'),
+      useWeth: true,
+      to: accounts[0].address,
+      deadline: c.unix2100,
+      userData: [],
+    });
   });
 
   describe('Oracle & swap enabled', async () => {
@@ -71,20 +66,17 @@ describe('Market', async () => {
     });
     it('should return value from oracle if initialized', async () => {
       await registerPrice();
-      await p.router.swap(
-        market.address,
-        {
-          amount: ethers.utils.parseEther('1'),
-          tokenIn: c.tokenType.ETH,
-          tokenOut: c.tokenType.BULL,
-          kind: c.swapKind.GIVEN_IN,
-          to: accounts[0].address,
-          slippage: 0,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
+      await market.swap({
+        amount: ethers.utils.parseEther('1'),
+        tokenIn: c.tokenType.ETH,
+        tokenOut: c.tokenType.BULL,
+        kind: c.swapKind.GIVEN_IN,
+        useWeth: true,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
+      });
       expect(await market.nftValue()).to.not.equal(await p.nftValue(market));
       expect(await market.nftValue()).to.equal(oracle[oracle.length - 1]);
       expect(await market.nftValueAvg(oracle.length)).to.equal(oracleAvg());
@@ -92,20 +84,17 @@ describe('Market', async () => {
 
     it('eth => bear swap', async () => {
       await registerPrice();
-      const tx = p.router.swap(
-        market.address,
-        {
-          amount: ethers.utils.parseEther('1'),
-          tokenIn: c.tokenType.ETH,
-          tokenOut: c.tokenType.BEAR,
-          kind: c.swapKind.GIVEN_IN,
-          to: accounts[0].address,
-          slippage: 0,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
+      const tx = market.swap({
+        amount: ethers.utils.parseEther('1'),
+        tokenIn: c.tokenType.ETH,
+        tokenOut: c.tokenType.BEAR,
+        kind: c.swapKind.GIVEN_IN,
+        useWeth: true,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
+      });
       await expect(tx).to.emit(market, 'PriceRegistered');
       expect(await market.nftValue()).to.equal(oracle[oracle.length - 1]);
       expect(await market.nftValueAvg(oracle.length)).to.equal(oracleAvg());
@@ -113,40 +102,35 @@ describe('Market', async () => {
 
     it('bull => eth swap', async () => {
       await registerPrice();
-      await p.router.swap(
-        market.address,
-        {
-          amount: ethers.utils.parseEther('100000'),
-          tokenIn: c.tokenType.BULL,
-          tokenOut: c.tokenType.ETH,
-          kind: c.swapKind.GIVEN_IN,
-          to: accounts[0].address,
-          slippage: 0,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
+      await market.swap({
+        amount: ethers.utils.parseEther('100000'),
+        tokenIn: c.tokenType.BULL,
+        tokenOut: c.tokenType.ETH,
+        kind: c.swapKind.GIVEN_IN,
+        useWeth: true,
+
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
+      });
       expect(await market.nftValue()).to.equal(oracle[oracle.length - 1]);
       expect(await market.nftValueAvg(oracle.length)).to.equal(oracleAvg());
     });
 
     it('bear => eth swap', async () => {
       await registerPrice();
-      await p.router.swap(
-        market.address,
-        {
-          amount: ethers.utils.parseEther('100000'),
-          tokenIn: c.tokenType.BEAR,
-          tokenOut: c.tokenType.ETH,
-          kind: c.swapKind.GIVEN_IN,
-          to: accounts[0].address,
-          slippage: 0,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
+      await market.swap({
+        amount: ethers.utils.parseEther('100000'),
+        tokenIn: c.tokenType.BEAR,
+        tokenOut: c.tokenType.ETH,
+        kind: c.swapKind.GIVEN_IN,
+        useWeth: true,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
+      });
       expect(await market.nftValue()).to.equal(oracle[oracle.length - 1]);
       expect(await market.nftValueAvg(oracle.length)).to.equal(oracleAvg());
     });
@@ -158,35 +142,29 @@ describe('Market', async () => {
         params: [false],
       });
 
-      const tx1 = p.router.swap(
-        market.address,
-        {
-          amount: ethers.utils.parseEther('100000'),
-          tokenIn: c.tokenType.BULL,
-          tokenOut: c.tokenType.BEAR,
-          kind: c.swapKind.GIVEN_IN,
-          to: accounts[0].address,
-          slippage: 0,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
+      const tx1 = await market.swap({
+        amount: ethers.utils.parseEther('100000'),
+        tokenIn: c.tokenType.BULL,
+        tokenOut: c.tokenType.BEAR,
+        kind: c.swapKind.GIVEN_IN,
+        useWeth: true,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
+      });
 
-      const tx2 = p.router.swap(
-        market.address,
-        {
-          amount: ethers.utils.parseEther('100000'),
-          tokenIn: c.tokenType.BEAR,
-          tokenOut: c.tokenType.BULL,
-          kind: c.swapKind.GIVEN_IN,
-          to: accounts[0].address,
-          slippage: 0,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
+      const tx2 = await market.swap({
+        amount: ethers.utils.parseEther('100000'),
+        tokenIn: c.tokenType.BEAR,
+        tokenOut: c.tokenType.BULL,
+        kind: c.swapKind.GIVEN_IN,
+        useWeth: true,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
+      });
       await network.provider.request({
         method: 'evm_mine',
         params: [],
@@ -207,20 +185,17 @@ describe('Market', async () => {
 
     it('should revert if required oracle length not reached', async () => {
       await registerPrice();
-      await p.router.swap(
-        market.address,
-        {
-          amount: ethers.utils.parseEther('10'),
-          tokenIn: c.tokenType.ETH,
-          tokenOut: c.tokenType.BULL,
-          kind: c.swapKind.GIVEN_IN,
-          to: accounts[0].address,
-          slippage: 0,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
+      await market.swap({
+        amount: ethers.utils.parseEther('10'),
+        tokenIn: c.tokenType.ETH,
+        tokenOut: c.tokenType.BULL,
+        kind: c.swapKind.GIVEN_IN,
+        useWeth: true,
+        to: accounts[0].address,
+        slippage: 0,
+        deadline: c.unix2100,
+        userData: [],
+      });
       expect(await market.nftValue()).to.equal(oracle[oracle.length - 1]);
       expect(await market.nftValueAvg(oracle.length)).to.equal(oracleAvg());
       expect(await market.oracleLength()).to.equal(oracle.length);
@@ -236,20 +211,18 @@ describe('Market', async () => {
 
     it('swap should be disabled if nftValue exceeds locked eth', async () => {
       for (let i = 0; i < 6; i++) {
-        await p.router.swap(
-          market.address,
-          {
-            amount: ethers.utils.parseEther('1'),
-            tokenIn: c.tokenType.ETH,
-            tokenOut: c.tokenType.BULL,
-            kind: c.swapKind.GIVEN_IN,
-            to: accounts[0].address,
-            slippage: 0,
-            deadline: c.unix2100,
-            userData: [],
-          },
-          true
-        );
+        await market.swap({
+          amount: ethers.utils.parseEther('1'),
+          tokenIn: c.tokenType.ETH,
+          tokenOut: c.tokenType.BULL,
+          kind: c.swapKind.GIVEN_IN,
+          useWeth: true,
+
+          to: accounts[0].address,
+          slippage: 0,
+          deadline: c.unix2100,
+          userData: [],
+        });
       }
       expect(await market.swapEnabled()).to.be.false;
     });

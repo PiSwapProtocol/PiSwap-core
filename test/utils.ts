@@ -1,9 +1,15 @@
 import { ContractTransaction } from '@ethersproject/contracts';
 import { BigNumber } from 'ethers';
 import { ethers, upgrades } from 'hardhat';
-import { ERC1155, ERC165, ERC721, PiSwapMarket, PiSwapMarket__factory, PiSwapRegistry } from '../typechain-types';
-import { PiSwapRouter01 } from '../typechain-types/PiSwapRouter01';
-import { WETH9 } from '../typechain-types/WETH9';
+import {
+  ERC1155,
+  ERC165,
+  ERC721,
+  PiSwapMarket,
+  PiSwapMarket__factory,
+  PiSwapRegistry,
+  WETH9,
+} from '../typechain-types';
 
 const ONE = ethers.utils.parseEther('1');
 
@@ -16,7 +22,6 @@ export class PiSwap {
   public implementation!: string;
   public weth!: WETH9;
   public registry!: PiSwapRegistry;
-  public router!: PiSwapRouter01;
 
   public static async create(owner: string, implementation?: string): Promise<PiSwap> {
     const p = new PiSwap();
@@ -45,18 +50,12 @@ export class PiSwap {
       this.weth.address,
       '',
     ])) as PiSwapRegistry;
-
-    this.router = (await (
-      await ethers.getContractFactory('PiSwapRouter01')
-    ).deploy(this.registry.address)) as PiSwapRouter01;
   }
 
   public async deplyoMarketERC721(nft?: { address: string; tokenId: string }): Promise<PiSwapMarket> {
     if (nft === undefined) {
       nft = {
-        address: await (
-          await (await ethers.getContractFactory('SampleERC721')).deploy('Test Token', 'TST', '')
-        ).address,
+        address: await (await (await ethers.getContractFactory('MockERC721')).deploy('Test Token', 'TST', '')).address,
         tokenId: '0',
       };
     }
@@ -66,7 +65,7 @@ export class PiSwap {
   public async deplyoMarketERC1155(nft?: { address: string; tokenId: string }): Promise<PiSwapMarket> {
     if (nft === undefined) {
       nft = {
-        address: await (await (await ethers.getContractFactory('SampleERC1155')).deploy()).address,
+        address: await (await (await ethers.getContractFactory('MockERC1155')).deploy()).address,
         tokenId: '0',
       };
     }
@@ -79,18 +78,18 @@ export class PiSwap {
   }
 
   public async deployERC721(): Promise<ERC721> {
-    return (await ethers.getContractFactory('SampleERC721')).deploy('Test Token', 'TST', '');
+    return (await ethers.getContractFactory('MockERC721')).deploy('Test Token', 'TST', '');
   }
 
   public async deployERC1155(): Promise<ERC1155> {
-    return (await ethers.getContractFactory('SampleERC1155')).deploy();
+    return (await ethers.getContractFactory('MockERC1155')).deploy();
   }
 
   public async getERC721(address: string): Promise<ERC721> {
-    return (await ethers.getContractFactory('SampleERC721')).connect(ethers.provider.getSigner()).attach(address);
+    return (await ethers.getContractFactory('MockERC721')).connect(ethers.provider.getSigner()).attach(address);
   }
   public async getERC1155(address: string): Promise<ERC1155> {
-    return (await ethers.getContractFactory('SampleERC1155')).connect(ethers.provider.getSigner()).attach(address);
+    return (await ethers.getContractFactory('MockERC1155')).connect(ethers.provider.getSigner()).attach(address);
   }
 
   public async getMarket(address: string): Promise<PiSwapMarket> {
@@ -99,7 +98,7 @@ export class PiSwap {
 
   public async getMarketAddressFromEvent(tx: Promise<ContractTransaction>): Promise<string> {
     const receipt = await (await tx).wait();
-    return receipt.events![0].args!.market;
+    return receipt.events![1].args!.market;
   }
 
   public getTokenId(market: PiSwapMarket, id: number): BigNumber {
@@ -114,7 +113,7 @@ export class PiSwap {
   public async depositedEth(market: PiSwapMarket, totalSupply?: BigNumber): Promise<BigNumber> {
     totalSupply = totalSupply ?? (await this.registry.totalSupply(this.getTokenId(market, 1)));
     const numerator = this.maxSupply.mul(this.stretchFactor).sub('1');
-    const denominator = this.maxSupply.sub(totalSupply);
+    const denominator = this.maxSupply.sub(totalSupply!);
     return numerator.div(denominator).add('1').sub(this.stretchFactor);
   }
 
@@ -186,9 +185,10 @@ export class PiSwap {
       .add(this.stretchFactor.mul(amountOut))
       .add(currentEth.mul(totalSupply))
       .add(totalSupply.mul(this.stretchFactor))
-      .sub(this.maxSupply.mul(currentEth));
+      .sub(this.maxSupply.mul(currentEth))
+      .sub(1);
     const denominator = this.maxSupply.sub(totalSupply).sub(amountOut);
-    return numerator.div(denominator).add(1);
+    return numerator.div(denominator).add('1');
   }
 
   public async burnOutGivenInWithFee(
@@ -290,7 +290,7 @@ export class PiSwap {
 }
 
 export const deployERC165 = async (): Promise<ERC165> => {
-  return (await ethers.getContractFactory('SampleERC165')).deploy();
+  return (await ethers.getContractFactory('MockERC165')).deploy();
 };
 
 function sqrt(y: BigNumber) {

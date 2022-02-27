@@ -7,10 +7,12 @@ struct PriceSnapshot {
 }
 
 library OracleLib {
+    /// @dev register a new price and append to price snapshot array
     function registerPrice(PriceSnapshot[] storage oracle, uint256 price) internal {
         oracle.push(PriceSnapshot({price: uint216(price), timestamp: uint40(block.timestamp)}));
     }
 
+    /// @dev average price over the last n amount of entries
     function avgPrice(PriceSnapshot[] storage oracle, uint256 amount) internal view returns (uint256) {
         uint256 length = oracle.length;
         require(length >= amount, "Oracle#avgPrice: INSUFFICIENT_DATA");

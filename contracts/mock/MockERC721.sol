@@ -3,7 +3,7 @@ pragma solidity 0.8.11;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
-contract SampleERC721 is ERC721 {
+contract MockERC721 is ERC721 {
     string private assetUrl;
 
     constructor(
@@ -13,6 +13,7 @@ contract SampleERC721 is ERC721 {
     ) ERC721(_name, _symbol) {
         assetUrl = _assetUrl;
         _mint(_msgSender(), 0);
+        _mint(_msgSender(), 1);
     }
 
     function tokenURI(uint256) public view override returns (string memory) {
@@ -20,12 +21,12 @@ contract SampleERC721 is ERC721 {
     }
 }
 
-contract SampleERC721Royalty is SampleERC721 {
+contract MockERC721Royalty is MockERC721 {
     constructor(
         string memory _name,
         string memory _symbol,
         string memory _assetUrl
-    ) SampleERC721(_name, _symbol, _assetUrl) {}
+    ) MockERC721(_name, _symbol, _assetUrl) {}
 
     function royaltyInfo(uint256, uint256 _salePrice) external view returns (address receiver, uint256 royaltyAmount) {
         receiver = address(this);

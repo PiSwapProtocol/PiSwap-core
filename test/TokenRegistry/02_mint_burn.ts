@@ -10,13 +10,18 @@ describe('Registry', async () => {
     accounts = await ethers.getSigners();
   });
 
-  describe('minting', async () => {
+  describe('Minting / Burning', async () => {
     let p: PiSwap;
     before(async () => {
       p = await PiSwap.create(accounts[0].address);
     });
     it('should not be able to mint tokens from non market accounts', async () => {
       await expect(p.registry.mint(accounts[1].address, 1, c.tokenType.BULL)).to.be.revertedWith(
+        'PiSwapRegistry#mint/burn: ONLY_MARKET'
+      );
+    });
+    it('should not be able to burn tokens from non market accounts', async () => {
+      await expect(p.registry.burn(accounts[1].address, 1, c.tokenType.BULL)).to.be.revertedWith(
         'PiSwapRegistry#mint/burn: ONLY_MARKET'
       );
     });

@@ -19,47 +19,41 @@ describe('Market', async () => {
     LiquidityTokenId = p.getTokenId(market, c.tokenType.LIQUIDITY);
 
     await p.weth.deposit({ value: ethers.utils.parseEther('100') });
-    await p.weth.approve(p.router.address, ethers.constants.MaxUint256);
-    await p.registry.setApprovalForAll(p.router.address, true);
-    await p.router.mint(
-      market.address,
-      {
-        amount: ethers.utils.parseEther('95'),
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      },
-      true
-    );
+    await p.weth.approve(market.address, ethers.constants.MaxUint256);
+
+    await market.mint({
+      amount: ethers.utils.parseEther('95'),
+      kind: c.swapKind.GIVEN_IN,
+      useWeth: true,
+      to: accounts[0].address,
+      slippage: 0,
+      deadline: c.unix2100,
+      userData: [],
+    });
 
     await p.weth.connect(accounts[1]).deposit({ value: ethers.utils.parseEther('100') });
-    await p.weth.connect(accounts[1]).approve(p.router.address, ethers.constants.MaxUint256);
-    await p.registry.connect(accounts[1]).setApprovalForAll(p.router.address, true);
+    await p.weth.connect(accounts[1]).approve(market.address, ethers.constants.MaxUint256);
 
-    await p.router.connect(accounts[1]).mint(
-      market.address,
-      {
-        amount: ethers.utils.parseEther('95'),
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[1].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      },
-      true
-    );
+    await market.connect(accounts[1]).mint({
+      amount: ethers.utils.parseEther('95'),
+      kind: c.swapKind.GIVEN_IN,
+      useWeth: true,
+      to: accounts[1].address,
+      slippage: 0,
+      deadline: c.unix2100,
+      userData: [],
+    });
   });
 
   describe('Removing liquidity', async () => {
     it('should fail if deadline was reached', async () => {
       await expect(
-        p.router.removeLiquidity(market.address, {
+        market.removeLiquidity({
           amountLiquidity: 0,
           minEth: 0,
           minBull: 0,
           minBear: 0,
+          useWeth: true,
           to: accounts[0].address,
           deadline: 0,
           userData: [],
@@ -74,6 +68,7 @@ describe('Market', async () => {
           minEth: 0,
           minBull: 0,
           minBear: 0,
+          useWeth: true,
           to: accounts[0].address,
           deadline: c.unix2100,
           userData: [],
@@ -82,38 +77,33 @@ describe('Market', async () => {
     });
 
     it('should be able to remove liquidity', async () => {
-      await p.router.addLiquidity(
-        market.address,
-        {
-          amountEth: ethers.utils.parseEther('1.5'),
-          minLiquidity: '0',
-          maxBull: ethers.utils.parseEther('200'),
-          maxBear: ethers.utils.parseEther('1000'),
-          to: accounts[0].address,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
-      await p.router.connect(accounts[1]).addLiquidity(
-        market.address,
-        {
-          amountEth: ethers.utils.parseEther('1.5'),
-          minLiquidity: '0',
-          maxBull: ethers.utils.parseEther('200'),
-          maxBear: ethers.utils.parseEther('1000'),
-          to: accounts[1].address,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
+      await market.addLiquidity({
+        amountEth: ethers.utils.parseEther('1.5'),
+        minLiquidity: '0',
+        maxBull: ethers.utils.parseEther('200'),
+        maxBear: ethers.utils.parseEther('1000'),
+        useWeth: true,
+        to: accounts[0].address,
+        deadline: c.unix2100,
+        userData: [],
+      });
+      await market.connect(accounts[1]).addLiquidity({
+        amountEth: ethers.utils.parseEther('1.5'),
+        minLiquidity: '0',
+        maxBull: ethers.utils.parseEther('200'),
+        maxBear: ethers.utils.parseEther('1000'),
+        useWeth: true,
+        to: accounts[1].address,
+        deadline: c.unix2100,
+        userData: [],
+      });
 
-      const tx = p.router.connect(accounts[1]).removeLiquidity(market.address, {
+      const tx = market.connect(accounts[1]).removeLiquidity({
         amountLiquidity: ethers.utils.parseEther('1.5'),
         minEth: ethers.utils.parseEther('1.5'),
         minBull: ethers.utils.parseEther('200'),
         minBear: ethers.utils.parseEther('1000'),
+        useWeth: true,
         to: accounts[1].address,
         deadline: c.unix2100,
         userData: [],
@@ -121,17 +111,7 @@ describe('Market', async () => {
       await expect(tx)
         .to.emit(market, 'LiquidityRemoved')
         .withArgs(
-          p.router.address,
           accounts[1].address,
-          ethers.utils.parseEther('1.5'),
-          ethers.utils.parseEther('1.5'),
-          ethers.utils.parseEther('200'),
-          ethers.utils.parseEther('1000')
-        );
-      await expect(tx)
-        .to.emit(p.router, 'LiquidityRemoved')
-        .withArgs(
-          market.address,
           accounts[1].address,
           ethers.utils.parseEther('1.5'),
           ethers.utils.parseEther('1.5'),
@@ -146,25 +126,27 @@ describe('Market', async () => {
 
     it('should fail due to insufficient balance', async () => {
       await expect(
-        p.router.connect(accounts[1]).removeLiquidity(market.address, {
+        market.connect(accounts[1]).removeLiquidity({
           amountLiquidity: ethers.utils.parseEther('1.5'),
           minEth: ethers.utils.parseEther('1.5'),
           minBull: ethers.utils.parseEther('200'),
           minBear: ethers.utils.parseEther('1000'),
+          useWeth: false,
           to: accounts[1].address,
           deadline: c.unix2100,
           userData: [],
         })
-      ).to.be.revertedWith('ERC1155: insufficient balance for transfer');
+      ).to.be.revertedWith('ERC1155: burn amount exceeds balance');
     });
 
     it('should fail if min eth not reached', async () => {
       await expect(
-        p.router.removeLiquidity(market.address, {
+        market.removeLiquidity({
           amountLiquidity: ethers.utils.parseEther('1.5'),
           minEth: ethers.utils.parseEther('1.51'),
           minBull: ethers.utils.parseEther('200'),
           minBear: ethers.utils.parseEther('1000'),
+          useWeth: true,
           to: accounts[1].address,
           deadline: c.unix2100,
           userData: [],
@@ -174,11 +156,12 @@ describe('Market', async () => {
 
     it('should fail if min bull tokens not reached', async () => {
       await expect(
-        p.router.removeLiquidity(market.address, {
+        market.removeLiquidity({
           amountLiquidity: ethers.utils.parseEther('1.5'),
           minEth: ethers.utils.parseEther('1.5'),
           minBull: ethers.utils.parseEther('201'),
           minBear: ethers.utils.parseEther('1000'),
+          useWeth: true,
           to: accounts[1].address,
           deadline: c.unix2100,
           userData: [],
@@ -188,11 +171,12 @@ describe('Market', async () => {
 
     it('should fail if min bear tokens not reached', async () => {
       await expect(
-        p.router.removeLiquidity(market.address, {
+        market.removeLiquidity({
           amountLiquidity: ethers.utils.parseEther('1.5'),
           minEth: ethers.utils.parseEther('1.5'),
           minBull: ethers.utils.parseEther('200'),
           minBear: ethers.utils.parseEther('1001'),
+          useWeth: true,
           to: accounts[1].address,
           deadline: c.unix2100,
           userData: [],

@@ -2,11 +2,13 @@
 pragma solidity 0.8.11;
 
 import "../lib/Types.sol";
+import "../lib/market/SwapKind.sol";
 
 interface Arguments {
     /// @notice arguments for minting tokens
     /// @param amount amount of tokens in/out depending on SwapKind
     /// @param swapKind see {Types-SwapKind}
+    /// @param useWeth true if WETH should be used, false if ERC1155 ETH
     /// @param to address to receive tokens
     /// @param slippage min amount out if GIVEN_IN, max amount in if GIVEN_OUT
     /// @param deadline deadline after which the transaction is no longer valid
@@ -14,6 +16,7 @@ interface Arguments {
     struct Mint {
         uint256 amount;
         SwapKind kind;
+        bool useWeth;
         address to;
         uint256 slippage;
         uint256 deadline;
@@ -22,10 +25,11 @@ interface Arguments {
 
     /// @notice arguments for burning tokens
     /// @param amount amount of tokens in/out depending on SwapKind
-    /// @param (kind, to, slippage, deadline, userData) see {Mint}
+    /// @param (kind, useWeth, to, slippage, deadline, userData) see {Mint}
     struct Burn {
         uint256 amount;
         SwapKind kind;
+        bool useWeth;
         address to;
         uint256 slippage;
         uint256 deadline;
@@ -37,12 +41,13 @@ interface Arguments {
     /// @param minLiquidity minimum amount of liquidity tokens to be minted
     /// @param maxBull maximum amount of Bull tokens to add to the liquidity pool
     /// @param maxBear maximum amount of Bear tokens to add to the liquidity pool
-    /// @param (to, deadline, userData) see {Mint}
+    /// @param (useWeth, to, deadline, userData) see {Mint}
     struct AddLiquidity {
         uint256 amountEth;
         uint256 minLiquidity;
         uint256 maxBull;
         uint256 maxBear;
+        bool useWeth;
         address to;
         uint256 deadline;
         bytes userData;
@@ -53,12 +58,13 @@ interface Arguments {
     /// @param minEth minimum amount of ETH out
     /// @param minBull minimum amount of Bull tokens out
     /// @param minBear minimum amount of Bear tokens out
-    /// @param (to, deadline, userData) see {Mint}
+    /// @param (useWeth, to, deadline, userData) see {Mint}
     struct RemoveLiquidity {
         uint256 amountLiquidity;
         uint256 minEth;
         uint256 minBull;
         uint256 minBear;
+        bool useWeth;
         address to;
         uint256 deadline;
         bytes userData;
@@ -66,24 +72,26 @@ interface Arguments {
 
     /// @param tokenIn token type in
     /// @param tokenOut token type out
-    /// @param (kind, amount, to, slippage, deadline, userData) see {Mint}
+    /// @param (amount, kind, useWeth, to, slippage, deadline, userData) see {Mint}
     struct Swap {
         uint256 amount;
         TokenType tokenIn;
         TokenType tokenOut;
         SwapKind kind;
-        uint256 slippage;
+        bool useWeth;
         address to;
+        uint256 slippage;
         uint256 deadline;
         bytes userData;
     }
 
     /// @param amount of NFTs to buy/sell (has to be 1 when swapping ERC721 tokens)
-    /// @param (slippage, to, deadline, userData) see {Mint}
+    /// @param (useWeth, to, slippage, deadline, userData) see {Mint}
     struct NFTSwap {
         uint256 amount;
-        uint256 slippage;
+        bool useWeth;
         address to;
+        uint256 slippage;
         uint256 deadline;
         bytes userData;
     }

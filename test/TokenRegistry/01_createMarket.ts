@@ -24,6 +24,7 @@ describe('Registry', async () => {
     });
 
     it('should create a new market', async () => {
+      expect(await p.registry.marketExists(token.address, 0)).to.be.false;
       const tokenAddress = token.address;
       const tokenId = ethers.BigNumber.from(0);
       const tx = p.registry.createMarket(tokenAddress, tokenId);
@@ -33,6 +34,7 @@ describe('Registry', async () => {
       const nft = await p.registry.nftInfo(market.address);
       expect(nft.tokenAddress).to.equal(tokenAddress);
       expect(nft.tokenId).to.equal(tokenId);
+      expect(await p.registry.marketExists(token.address, 0)).to.be.true;
     });
 
     it('deployed market contract should get owner address from factory', async () => {

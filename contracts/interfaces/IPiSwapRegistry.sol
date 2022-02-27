@@ -7,8 +7,9 @@ interface IPiSwapRegistry {
     event MarketCreated(address indexed market, address indexed NFTContract, uint256 indexed tokenId);
     event Deposit(address indexed sender, uint256 amount);
     event Withdrawal(address indexed sender, address indexed to, uint256 amount);
-    event FeeUpdated(uint256 feeBefore, uint256 feeAfter);
-    event OracleLengthUpdated(uint256 lengthBefore, uint256 lengthAfter);
+    event FeeUpdated(uint256 indexed feeBefore, uint256 indexed feeAfter);
+    event OracleLengthUpdated(uint256 indexed lengthBefore, uint256 indexed lengthAfter);
+    event BeneficiaryUpdated(address indexed oldBeneficiary, address indexed newBeneficiary);
 
     function WETH() external view returns (address);
 

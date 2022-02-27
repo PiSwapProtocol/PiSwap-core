@@ -3,14 +3,15 @@ pragma solidity 0.8.11;
 
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 
-contract SampleERC1155 is ERC1155 {
+contract MockERC1155 is ERC1155 {
     constructor() ERC1155("") {
         _mint(_msgSender(), 0, 2, "");
+        _mint(_msgSender(), 1, 2, "");
     }
 }
 
-contract SampleERC1155Royalty is SampleERC1155 {
-    constructor() SampleERC1155() {}
+contract MockERC1155Royalty is MockERC1155 {
+    constructor() MockERC1155() {}
 
     function royaltyInfo(uint256, uint256 _salePrice) external view returns (address receiver, uint256 royaltyAmount) {
         receiver = address(this);

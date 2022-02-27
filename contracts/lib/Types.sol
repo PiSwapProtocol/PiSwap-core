@@ -8,13 +8,6 @@ enum TokenType {
     LIQUIDITY
 }
 
-/// GIVEN_IN if amount of tokens sending to the pool is known
-/// GIVEN_OUT if amount of tokens received from the pool is known
-enum SwapKind {
-    GIVEN_IN,
-    GIVEN_OUT
-}
-
 enum NFTType {
     ERC721,
     ERC1155
@@ -45,11 +38,5 @@ library TokenTypeLib {
     function invert(TokenType _type) internal pure returns (TokenType) {
         assert(_type == TokenType.BULL || _type == TokenType.BEAR);
         return _type == TokenType.BULL ? TokenType.BEAR : TokenType.BULL;
-    }
-}
-
-library SwapKindLib {
-    function givenIn(SwapKind _kind) internal pure returns (bool) {
-        return _kind == SwapKind.GIVEN_IN;
     }
 }

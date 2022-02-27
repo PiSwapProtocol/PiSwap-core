@@ -19,36 +19,30 @@ describe('Market', async () => {
     LiquidityTokenId = p.getTokenId(market, c.tokenType.LIQUIDITY);
 
     await p.weth.deposit({ value: ethers.utils.parseEther('100') });
-    await p.weth.approve(p.router.address, ethers.constants.MaxUint256);
-    await p.registry.setApprovalForAll(p.router.address, true);
-    await p.weth.connect(accounts[1]).deposit({ value: ethers.utils.parseEther('100') });
-    await p.weth.connect(accounts[1]).approve(p.router.address, ethers.constants.MaxUint256);
-    await p.registry.connect(accounts[1]).setApprovalForAll(p.router.address, true);
+    await p.weth.approve(market.address, ethers.constants.MaxUint256);
 
-    await p.router.mint(
-      market.address,
-      {
-        amount: ethers.utils.parseEther('95'),
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[0].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      },
-      true
-    );
-    await p.router.connect(accounts[1]).mint(
-      market.address,
-      {
-        amount: ethers.utils.parseEther('95'),
-        kind: c.swapKind.GIVEN_IN,
-        to: accounts[1].address,
-        slippage: 0,
-        deadline: c.unix2100,
-        userData: [],
-      },
-      true
-    );
+    await market.mint({
+      amount: ethers.utils.parseEther('95'),
+      kind: c.swapKind.GIVEN_IN,
+      useWeth: true,
+      to: accounts[0].address,
+      slippage: 0,
+      deadline: c.unix2100,
+      userData: [],
+    });
+
+    await p.weth.connect(accounts[1]).deposit({ value: ethers.utils.parseEther('100') });
+    await p.weth.connect(accounts[1]).approve(market.address, ethers.constants.MaxUint256);
+
+    await market.connect(accounts[1]).mint({
+      amount: ethers.utils.parseEther('95'),
+      kind: c.swapKind.GIVEN_IN,
+      useWeth: true,
+      to: accounts[1].address,
+      slippage: 0,
+      deadline: c.unix2100,
+      userData: [],
+    });
   });
 
   describe('Adding liquidity', async () => {
@@ -59,6 +53,7 @@ describe('Market', async () => {
           minLiquidity: '0',
           maxBull: ethers.constants.MaxUint256,
           maxBear: ethers.constants.MaxUint256,
+          useWeth: true,
           to: accounts[0].address,
           deadline: 0,
           userData: [],
@@ -73,6 +68,7 @@ describe('Market', async () => {
           minLiquidity: '0',
           maxBull: '1',
           maxBear: '1',
+          useWeth: true,
           to: accounts[0].address,
           deadline: c.unix2100,
           userData: [],
@@ -87,6 +83,7 @@ describe('Market', async () => {
           minLiquidity: '0',
           maxBull: '0',
           maxBear: '1',
+          useWeth: true,
           to: accounts[0].address,
           deadline: c.unix2100,
           userData: [],
@@ -101,6 +98,7 @@ describe('Market', async () => {
           minLiquidity: '0',
           maxBull: '1',
           maxBear: '0',
+          useWeth: true,
           to: accounts[0].address,
           deadline: c.unix2100,
           userData: [],
@@ -109,40 +107,28 @@ describe('Market', async () => {
     });
 
     it('should be able to provide initial liquidity', async () => {
-      const tx = p.router.addLiquidity(
-        market.address,
-        {
-          amountEth: ethers.utils.parseEther('1.5'),
-          minLiquidity: '0',
-          maxBull: ethers.utils.parseEther('200'),
-          maxBear: ethers.utils.parseEther('1000'),
-          to: accounts[0].address,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
+      const tx = market.addLiquidity({
+        amountEth: ethers.utils.parseEther('1.5'),
+        minLiquidity: '0',
+        maxBull: ethers.utils.parseEther('200'),
+        maxBear: ethers.utils.parseEther('1000'),
+        useWeth: true,
+        to: accounts[0].address,
+        deadline: c.unix2100,
+        userData: [],
+      });
 
       await expect(tx)
         .to.emit(market, 'LiquidityAdded')
         .withArgs(
-          p.router.address,
+          accounts[0].address,
           accounts[0].address,
           ethers.utils.parseEther('1.5'),
           ethers.utils.parseEther('1.5'),
           ethers.utils.parseEther('200'),
           ethers.utils.parseEther('1000')
         );
-      await expect(tx)
-        .to.emit(p.router, 'LiquidityAdded')
-        .withArgs(
-          market.address,
-          accounts[0].address,
-          ethers.utils.parseEther('1.5'),
-          ethers.utils.parseEther('1.5'),
-          ethers.utils.parseEther('200'),
-          ethers.utils.parseEther('1000')
-        );
+      /* It's emitting the `LiquidityAdded` event from the `PiSwapMarket` contract. */
       await expect(tx)
         .to.emit(p.registry, 'TransferSingle')
         .withArgs(
@@ -161,75 +147,66 @@ describe('Market', async () => {
     });
 
     it('should fail if min liquidity not reached', async () => {
-      const tx = p.router.addLiquidity(
-        market.address,
-        {
-          amountEth: ethers.utils.parseEther('1.51'),
-          minLiquidity: '0',
-          maxBull: ethers.utils.parseEther('200'),
-          maxBear: ethers.utils.parseEther('1000'),
-          to: accounts[0].address,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
+      const tx = market.addLiquidity({
+        amountEth: ethers.utils.parseEther('1.51'),
+        minLiquidity: '0',
+        maxBull: ethers.utils.parseEther('200'),
+        maxBear: ethers.utils.parseEther('1000'),
+        useWeth: true,
+
+        to: accounts[0].address,
+        deadline: c.unix2100,
+        userData: [],
+      });
       await expect(tx).to.be.revertedWith('PiSwapMarket#addLiquidity: SLIPPAGE');
     });
 
     it('should fail if max bull tokens not reached', async () => {
-      const tx = p.router.addLiquidity(
-        market.address,
-        {
-          amountEth: ethers.utils.parseEther('1.5'),
-          minLiquidity: '0',
-          maxBull: ethers.utils.parseEther('199'),
-          maxBear: ethers.utils.parseEther('1000'),
-          to: accounts[0].address,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
+      const tx = market.addLiquidity({
+        amountEth: ethers.utils.parseEther('1.5'),
+        minLiquidity: '0',
+        maxBull: ethers.utils.parseEther('199'),
+        maxBear: ethers.utils.parseEther('1000'),
+        useWeth: true,
+
+        to: accounts[0].address,
+        deadline: c.unix2100,
+        userData: [],
+      });
       await expect(tx).to.be.revertedWith('PiSwapMarket#addLiquidity: SLIPPAGE');
     });
 
     it('should fail if max bear tokens not reached', async () => {
-      const tx = p.router.addLiquidity(
-        market.address,
-        {
-          amountEth: ethers.utils.parseEther('1.5'),
-          minLiquidity: '0',
-          maxBull: ethers.utils.parseEther('200'),
-          maxBear: ethers.utils.parseEther('999'),
-          to: accounts[0].address,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
+      const tx = market.addLiquidity({
+        amountEth: ethers.utils.parseEther('1.5'),
+        minLiquidity: '0',
+        maxBull: ethers.utils.parseEther('200'),
+        maxBear: ethers.utils.parseEther('999'),
+        useWeth: true,
+
+        to: accounts[0].address,
+        deadline: c.unix2100,
+        userData: [],
+      });
       await expect(tx).to.be.revertedWith('PiSwapMarket#addLiquidity: SLIPPAGE');
     });
 
     it('should be able to provide additional liquidity', async () => {
-      const tx = p.router.connect(accounts[1]).addLiquidity(
-        market.address,
-        {
-          amountEth: ethers.utils.parseEther('3'),
-          minLiquidity: ethers.utils.parseEther('3'),
-          maxBull: ethers.utils.parseEther('400'),
-          maxBear: ethers.utils.parseEther('2000'),
-          to: accounts[1].address,
-          deadline: c.unix2100,
-          userData: [],
-        },
-        true
-      );
+      const tx = market.connect(accounts[1]).addLiquidity({
+        amountEth: ethers.utils.parseEther('3'),
+        minLiquidity: ethers.utils.parseEther('3'),
+        maxBull: ethers.utils.parseEther('400'),
+        maxBear: ethers.utils.parseEther('2000'),
+        useWeth: true,
+        to: accounts[1].address,
+        deadline: c.unix2100,
+        userData: [],
+      });
 
       await expect(tx)
-        .to.emit(p.router, 'LiquidityAdded')
+        .to.emit(market, 'LiquidityAdded')
         .withArgs(
-          market.address,
+          accounts[1].address,
           accounts[1].address,
           ethers.utils.parseEther('3'),
           ethers.utils.parseEther('3'),

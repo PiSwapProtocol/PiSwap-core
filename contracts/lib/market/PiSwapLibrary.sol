@@ -3,10 +3,16 @@ pragma solidity 0.8.11;
 
 import "./Math.sol";
 
-/// @dev When minting and burning tokens, due to precision errors, a few wei can be locked in the smart contract
-/// @dev These locked wei will be automatically added to the liquidity pool, the impact is insignificant
-/// @dev To avoid paying out more tokens than ETH locked, the calculations are rounded to ensure all bull and bear tokens can be redeemed
-/// @dev This affects markets where >~10.000 ETH have been deposited
+/**
+    When minting and burning tokens, due to precision limitations, a few wei can be locked in the smart contract
+    These locked wei will be automatically added to the liquidity pool, the impact is insignificant
+    To avoid paying out more tokens than ETH locked, the calculations are rounded to ensure all bull and bear tokens can be redeemed
+    This affects markets where >~10.000 ETH have been deposited
+
+    Additionally due to precision limitations when minting given out or burning given in
+    the amount of tokens received/given in will be rounded to keep the calculations of deposited ETH consistent.
+    This results in a neglibile loss for these kinds of trades (< 1e-13 ETH/Tokens).
+ */
 library PiSwapLibrary {
     using Math for uint256;
     uint256 internal constant MAX_SUPPLY = 1000000000 ether;
@@ -46,14 +52,14 @@ library PiSwapLibrary {
         /**
             amountOut = totalSupply(currentEth + amountIn) - totalSupply
             =>
-                        cuurentEth * amountOut) + 100 * amountOut + currentEth * totalSupply + 100 * currentEth - MAX_SUPPLY * currentEth
+                        cuurentEth * amountOut) + stretchFactor * amountOut + currentEth * totalSupply + stretchFactor * currentEth - MAX_SUPPLY * currentEth
             amountIn = -------------------------------------------------------------------------------------------------------------------
                                                                 MAX_SUPPLY - totalSupply - amountOut
          */
-        amountIn =
+        // prettier-ignore
+        amountIn = 
             (currentEth * _amountOut + STRETCH_FACTOR * _amountOut + currentEth * _totalSupply + _totalSupply * STRETCH_FACTOR - MAX_SUPPLY * currentEth - 1) /
-            (MAX_SUPPLY - _totalSupply - _amountOut) +
-            1;
+            (MAX_SUPPLY - _totalSupply - _amountOut) + 1;
     }
 
     /// @notice calculates the amount of ETH out based on the total supply
@@ -79,7 +85,10 @@ library PiSwapLibrary {
             amountIn = -----------------------------------------------------
                         MAX_SUPPLY + amountOut * (totalSupply - MAX_SUPPLY)
          */
-        amountIn = (_amountOut * (MAX_SUPPLY - _totalSupply)**2 - 1) / (STRETCH_FACTOR * MAX_SUPPLY + _amountOut * _totalSupply - _amountOut * MAX_SUPPLY) + 1;
+        amountIn =
+            (_amountOut * (MAX_SUPPLY - _totalSupply)**2 - 1) /
+            (STRETCH_FACTOR * MAX_SUPPLY + _amountOut * _totalSupply - _amountOut * MAX_SUPPLY) +
+            1;
         require(amountIn <= _totalSupply, "PiSwapMarket#burn: AMOUNT_EXCEEDS_SUPPLY");
     }
 

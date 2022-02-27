@@ -1,20 +1,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.11;
 
+// interfaces
 import "./interfaces/IPiSwapRegistry.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC20/IERC20Upgradeable.sol";
+// libraries
 import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
-
+import "./lib/registry/BeaconProxyOptimized.sol";
+// base contracts
+import "./lib/registry/BeaconUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155SupplyUpgradeable.sol";
-import "./lib/BeaconUpgradeable.sol";
-
-import "./lib/BeaconProxyOptimized.sol";
 
 interface IMarket {
     function initialize(
-        address _tokenAddress,
-        uint256 _tokenId,
-        NFTType _nftType
+        address tokenAddress,
+        uint256 tokenId,
+        NFTType nftType
     ) external;
 }
 
@@ -67,96 +68,112 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
     }
 
     /// @notice Creates a new market for a specified NFT
-    /// @param _tokenAddress     address of the NFT token contract
-    /// @param _tokenId          Id of the NFT
-    /// @return market           the address of the deployed market contract
-    function createMarket(address _tokenAddress, uint256 _tokenId) external returns (address market) {
-        require(markets[_tokenAddress][_tokenId] == address(0), _errMsg("createMarket", "MARKET_EXISTS"));
-        require(_tokenAddress != address(this), _errMsg("createMarket", "INVALID"));
-        NFT memory data = NFT({tokenAddress: _tokenAddress, tokenId: _tokenId});
+    /// @param tokenAddress     address of the NFT token contract
+    /// @param tokenId          Id of the NFT
+    /// @return market          the address of the deployed market contract
+    function createMarket(address tokenAddress, uint256 tokenId) external returns (address market) {
+        require(markets[tokenAddress][tokenId] == address(0), _errMsg("createMarket", "MARKET_EXISTS"));
+        require(tokenAddress != address(this), _errMsg("createMarket", "INVALID"));
+        NFT memory data = NFT({tokenAddress: tokenAddress, tokenId: tokenId});
 
         // deploy market contract
-        NFTType nftType = _getNFTType(_tokenAddress);
+        NFTType nftType = _getNFTType(tokenAddress);
+        // TODO: if ERC721 require ownerOf != address(0)
         market = address(new BeaconProxyOptimized());
-        markets[_tokenAddress][_tokenId] = market;
+        markets[tokenAddress][tokenId] = market;
 
-        IMarket(market).initialize(_tokenAddress, _tokenId, nftType);
+        IMarket(market).initialize(tokenAddress, tokenId, nftType);
 
         // register token
         nftInfo[market] = data;
 
-        emit MarketCreated(market, _tokenAddress, _tokenId);
-    }
-
-    function marketExists(address _tokenAddress, uint256 _tokenId) public view returns (bool) {
-        address market = markets[_tokenAddress][_tokenId];
-        NFT memory data = nftInfo[market];
-        return data.tokenAddress != address(0);
+        emit MarketCreated(market, tokenAddress, tokenId);
     }
 
     /// @notice Mint tokens to an address
-    /// @dev              only callable by markets
-    /// @param _to        address to mint the tokens to
-    /// @param _amount    amount of tokens to mint
-    /// @param _tokenType type of the token
+    /// @dev             only callable by markets
+    /// @param to        address to mint the tokens to
+    /// @param amount    amount of tokens to mint
+    /// @param tokenType type of the token
     function mint(
-        address _to,
-        uint256 _amount,
-        TokenType _tokenType
-    ) public onlyMarket {
-        require(_amount > 0, _errMsg("mint", "AMOUNT_ZERO"));
-        uint256 tokenId = _tokenType.id(_msgSender());
-        _mint(_to, tokenId, _amount, "");
+        address to,
+        uint256 amount,
+        TokenType tokenType
+    ) external onlyMarket {
+        assert(amount > 0);
+        uint256 tokenId = tokenType.id(_msgSender());
+        _mint(to, tokenId, amount, "");
     }
 
     /// @notice Burn tokens from an address
-    /// @dev              only callable by markets
-    /// @param _from      address to burn the tokens from
-    /// @param _amount    amount of tokens to burn
-    /// @param _tokenType type of the token
+    /// @dev             only callable by markets
+    /// @param from      address to burn the tokens from
+    /// @param amount    amount of tokens to burn
+    /// @param tokenType type of the token
     function burn(
-        address _from,
-        uint256 _amount,
-        TokenType _tokenType
-    ) public onlyMarket {
-        require(_amount > 0, _errMsg("burn", "AMOUNT_ZERO"));
-        uint256 tokenId = _tokenType.id(_msgSender());
-        _burn(_from, tokenId, _amount);
+        address from,
+        uint256 amount,
+        TokenType tokenType
+    ) external onlyMarket {
+        require(amount > 0, _errMsg("burn", "AMOUNT_ZERO"));
+        uint256 tokenId = tokenType.id(_msgSender());
+        _burn(from, tokenId, amount);
     }
 
-    function setFee(uint256 _newFee) public onlyOwner {
-        require(_newFee <= 200);
-        emit FeeUpdated(fee, _newFee);
-        fee = _newFee;
+    /// @notice wrap WETH into NFTETH
+    /// @param amount of WETH to wrap
+    function deposit(uint256 amount) external {
+        IERC20Upgradeable(WETH).safeTransferFrom(_msgSender(), address(this), amount);
+        _mint(_msgSender(), 0, amount, "");
+        emit Deposit(_msgSender(), amount);
     }
 
-    function setOracleLength(uint256 _newOracleLength) public onlyOwner {
-        require(_newOracleLength >= 5);
-        emit OracleLengthUpdated(oracleLength, _newOracleLength);
-        oracleLength = _newOracleLength;
+    /// @notice unwrap NFTETH into WETH
+    /// @param amount of NFTETH to unwrap
+    /// @param to     address to receive WETH
+    function withdraw(uint256 amount, address to) external {
+        _burn(_msgSender(), 0, amount);
+        IERC20Upgradeable(WETH).safeTransfer(to, amount);
+        emit Withdrawal(_msgSender(), to, amount);
     }
 
-    function setBeneficiary(address _beneficiary) public onlyOwner {
-        // if (_beneficiary.isContract()) {
-        //     require(IERC165Upgradeable(_beneficiary).supportsInterface(0x4e2312e0), "PiSwapRegistry#setBeneficiary: DOES_NOT_SUPPORT_ERC1155RECEIVER");
-        // }
-        beneficiary = _beneficiary;
+    /// @notice sets beneficiary receiving protocol fee
+    function setBeneficiary(address newBeneficiary) external onlyOwner {
+        emit BeneficiaryUpdated(beneficiary, newBeneficiary);
+        beneficiary = newBeneficiary;
     }
 
-    function deposit(uint256 _amount) public {
-        IERC20Upgradeable(WETH).safeTransferFrom(_msgSender(), address(this), _amount);
-        _mint(_msgSender(), 0, _amount, "");
-        emit Deposit(_msgSender(), _amount);
+    /// @notice sets new protocol fee
+    /// @dev    fee cannot exceed 2%
+    function setFee(uint256 newFee) external onlyOwner {
+        require(newFee <= 200);
+        emit FeeUpdated(fee, newFee);
+        fee = newFee;
     }
 
-    function withdraw(uint256 _amount, address _to) public {
-        _burn(_msgSender(), 0, _amount);
-        IERC20Upgradeable(WETH).safeTransfer(_to, _amount);
-        emit Withdrawal(_msgSender(), _to, _amount);
+    /// @notice sets new oracle length
+    /// @dev    minimum is 5 blocks
+    function setOracleLength(uint256 newOracleLength) external onlyOwner {
+        require(newOracleLength >= 5);
+        emit OracleLengthUpdated(oracleLength, newOracleLength);
+        oracleLength = newOracleLength;
     }
 
-    function _isMarket(address _market) private view returns (bool) {
-        return nftInfo[_market].tokenAddress != address(0);
+    /**
+     * @dev See {IERC1155-_setURI}.
+     */
+    function setURI(string calldata newUri) external onlyOwner {
+        _setURI(newUri);
+    }
+
+    /// @notice check whether market exists for a specific NFT
+    /// @param tokenAddress NFT contract address
+    /// @param tokenId      NFT token id
+    /// @return             true if market exists
+    function marketExists(address tokenAddress, uint256 tokenId) public view returns (bool) {
+        address market = markets[tokenAddress][tokenId];
+        NFT memory data = nftInfo[market];
+        return data.tokenAddress != address(0);
     }
 
     /**
@@ -169,8 +186,12 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
         return super.isApprovedForAll(account, operator);
     }
 
-    function _getNFTType(address _tokenAddress) private view returns (NFTType) {
-        IERC165Upgradeable token = IERC165Upgradeable(_tokenAddress);
+    function _isMarket(address market) private view returns (bool) {
+        return nftInfo[market].tokenAddress != address(0);
+    }
+
+    function _getNFTType(address tokenAddress) private view returns (NFTType) {
+        IERC165Upgradeable token = IERC165Upgradeable(tokenAddress);
         if (token.supportsInterface(0x80ac58cd)) {
             return NFTType.ERC721;
         } else if (token.supportsInterface(0xd9b67a26)) {
@@ -180,8 +201,8 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
         }
     }
 
-    function _errMsg(string memory _method, string memory _message) private pure returns (string memory) {
-        return string(abi.encodePacked("PiSwapRegistry#", _method, ": ", _message));
+    function _errMsg(string memory method, string memory message) private pure returns (string memory) {
+        return string(abi.encodePacked("PiSwapRegistry#", method, ": ", message));
     }
 
     uint256[50] private __gap;
