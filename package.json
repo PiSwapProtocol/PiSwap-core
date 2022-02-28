@@ -13,7 +13,8 @@
     "url": "https://github.com/PiSwapProtocol/PiSwap-core/issues"
   },
   "scripts": {
-    "test": "hardhat typechain && hardhat test",
+    "compile": "hardhat compile && hardhat typechain",
+    "test": "hardhat test",
     "prettier": "prettier --write 'contracts/**/*.sol'",
     "typechain": "typechain --target ethers-v5 --out-dir artifacts/typechain"
   },

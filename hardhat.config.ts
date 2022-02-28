@@ -9,7 +9,7 @@ require('dotenv').config();
 require('hardhat-contract-sizer');
 
 const config: HardhatUserConfig =
-  process.env.INFURA_TOKEN === 'dev'
+  process.env.ENV === 'dev'
     ? {
         defaultNetwork: 'hardhat',
         networks: {
