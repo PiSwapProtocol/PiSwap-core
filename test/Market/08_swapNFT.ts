@@ -629,9 +629,9 @@ describe('Market', async () => {
       let market1155: PiSwapMarket;
 
       before(async () => {
-        (erc721 = await (await ethers.getContractFactory('MockERC721Royalty')).deploy('Test Token', 'TST', '')),
-          (erc1155 = await (await ethers.getContractFactory('MockERC1155Royalty')).deploy()),
-          (market721 = await p.deployMarket({ address: erc721.address, tokenId: '0' }));
+        erc721 = await (await ethers.getContractFactory('MockERC721Royalty')).deploy('Test Token', 'TST', '');
+        erc1155 = await (await ethers.getContractFactory('MockERC1155Royalty')).deploy();
+        market721 = await p.deployMarket({ address: erc721.address, tokenId: '0' });
         market1155 = await p.deployMarket({ address: erc1155.address, tokenId: '0' });
         await erc721.setApprovalForAll(market721.address, true);
         await erc1155.setApprovalForAll(market1155.address, true);

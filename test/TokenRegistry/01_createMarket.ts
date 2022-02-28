@@ -1,7 +1,7 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { ERC721, PiSwapMarket, PiSwapRegistry__factory } from '../../typechain-types';
+import { ERC721, MockERC1155, MockERC1155Royalty, PiSwapMarket, PiSwapRegistry__factory } from '../../typechain-types';
 import c from '../constants';
 import { deployERC165, PiSwap } from '../utils';
 
@@ -73,6 +73,36 @@ describe('Registry', async () => {
       await expect(p.registry.createMarket(p.registry.address, 0)).to.be.revertedWith(
         'PiSwapRegistry#createMarket: INVALID'
       );
+    });
+
+    it('should not allow creating market for non existent ERC721 NFT', async () => {
+      await expect(p.registry.createMarket(token.address, 2)).to.be.revertedWith(
+        'ERC721: owner query for nonexistent token'
+      );
+    });
+
+    describe('ERC1155', async () => {
+      let erc1155_1: MockERC1155;
+      let erc1155_2: MockERC1155Royalty;
+
+      before(async () => {
+        erc1155_1 = await (await ethers.getContractFactory('MockERC1155')).deploy();
+        erc1155_2 = await (await ethers.getContractFactory('MockERC1155Royalty')).deploy();
+      });
+
+      it('should not be able to deploy market for ERC1155 implementing total supply if NFT does not exist', async () => {
+        await expect(p.registry.createMarket(erc1155_2.address, 2)).to.be.revertedWith(
+          'PiSwapRegistry#createMarket: NON_EXISTENT_NFT'
+        );
+      });
+
+      it('should be able to deploy market for ERC1155 implementing total supply if NFT exists', async () => {
+        await expect(p.registry.createMarket(erc1155_2.address, 1)).to.emit(p.registry, 'MarketCreated');
+      });
+
+      it('should be able to create a market for any ERC1155 that does not implement total supply', async () => {
+        await expect(p.registry.createMarket(erc1155_1.address, 2)).to.emit(p.registry, 'MarketCreated');
+      });
     });
   });
 });
