@@ -16,6 +16,10 @@ $ npm i                 # install dependencies
 $ npm run compile       # compile contracts and generate typechain
 $ npm test              # run tests
 ```
+optional:
+```
+$ npm run coverage      # run test coverage tool
+```
 
 ## Structure
 

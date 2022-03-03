@@ -15,6 +15,7 @@
   "scripts": {
     "compile": "hardhat compile && hardhat typechain",
     "test": "hardhat test",
+    "coverage": "hardhat coverage",
     "prettier": "prettier --write 'contracts/**/*.sol'",
     "typechain": "typechain --target ethers-v5 --out-dir artifacts/typechain"
   },
