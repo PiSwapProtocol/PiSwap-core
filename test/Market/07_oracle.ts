@@ -79,6 +79,7 @@ describe('Market', async () => {
       });
       expect(await market.nftValue()).to.not.equal(await p.nftValue(market));
       expect(await market.nftValue()).to.equal(oracle[oracle.length - 1]);
+      expect((await market.getOracleEntry(0)).price).to.equal(oracle[0]);
       expect(await market.nftValueAvg(oracle.length)).to.equal(oracleAvg());
     });
 

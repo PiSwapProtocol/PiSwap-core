@@ -132,7 +132,7 @@ describe('Market', async () => {
 
       before(async () => {
         market = await p.deplyoMarketERC721();
-        erc721 = await p.getERC721((await market.nftData()).tokenAddress);
+        erc721 = await p.getERC721((await market.underlyingNFT()).tokenAddress);
         await erc721.setApprovalForAll(market.address, true);
         await setup(market);
       });
@@ -348,7 +348,7 @@ describe('Market', async () => {
 
       before(async () => {
         market = await p.deplyoMarketERC1155();
-        erc1155 = await p.getERC1155((await market.nftData()).tokenAddress);
+        erc1155 = await p.getERC1155((await market.underlyingNFT()).tokenAddress);
         await erc1155.setApprovalForAll(market.address, true);
         await setup(market);
       });

@@ -24,11 +24,11 @@ describe('Registry', async () => {
       await p.registry.createMarket(token1.address, '0');
       market1 = await (
         await ethers.getContractFactory('UpgradeTestA')
-      ).attach(await p.registry.markets(token1.address, '0'));
+      ).attach(await p.registry.getMarketForNFT(token1.address, '0'));
       await p.registry.createMarket(token2.address, '0');
       market2 = await (
         await ethers.getContractFactory('UpgradeTestA')
-      ).attach(await p.registry.markets(token2.address, '0'));
+      ).attach(await p.registry.getMarketForNFT(token2.address, '0'));
     });
 
     it('should be able to upgrade market implementation', async () => {

@@ -25,15 +25,15 @@ describe('Registry', async () => {
 
     it('should create a new market', async () => {
       expect(await p.registry.marketExists(token.address, 0)).to.be.false;
+      await expect(p.registry.getMarketForNFT(token.address, 0)).to.be.revertedWith(
+        'PiSwapRegistry#getMarketForNFT: MARKET_DOES_NOT_EXIST'
+      );
       const tokenAddress = token.address;
       const tokenId = ethers.BigNumber.from(0);
       const tx = p.registry.createMarket(tokenAddress, tokenId);
       market = await p.getMarket(await p.getMarketAddressFromEvent(tx));
       await expect(tx).to.emit(p.registry, 'MarketCreated').withArgs(market.address, tokenAddress, tokenId);
-      expect(await p.registry.markets(tokenAddress, 0)).to.equal(market.address);
-      const nft = await p.registry.nftInfo(market.address);
-      expect(nft.tokenAddress).to.equal(tokenAddress);
-      expect(nft.tokenId).to.equal(tokenId);
+      expect(await p.registry.getMarketForNFT(tokenAddress, 0)).to.equal(market.address);
       expect(await p.registry.marketExists(token.address, 0)).to.be.true;
     });
 
@@ -43,12 +43,12 @@ describe('Registry', async () => {
     });
 
     it('deployed market should register ERC721 token', async () => {
-      expect((await market.nftData()).nftType).to.equal(c.NFTType.ERC721);
+      expect((await market.underlyingNFT()).nftType).to.equal(c.NFTType.ERC721);
     });
 
     it('deployed market should register ERC1155 token', async () => {
       const market = await p.deplyoMarketERC1155();
-      expect((await market.nftData()).nftType).to.equal(c.NFTType.ERC1155);
+      expect((await market.underlyingNFT()).nftType).to.equal(c.NFTType.ERC1155);
     });
 
     it('should fail if contract does not implement ERC165', async () => {

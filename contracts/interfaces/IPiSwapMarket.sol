@@ -9,16 +9,52 @@ interface IRegistry is IPiSwapRegistry, IERC1155 {
     function totalSupply(uint256 id) external view returns (uint256);
 }
 
+struct NFTData {
+    uint256 tokenId;
+    address tokenAddress;
+    NFTType nftType;
+}
+
 interface IPiSwapMarket is Arguments {
     event Minted(address indexed sender, address indexed to, uint256 amountIn, uint256 amountOut);
     event Burned(address indexed sender, address indexed to, uint256 amountIn, uint256 amountOut);
-    event LiquidityAdded(address indexed sender, address indexed to, uint256 liquidityMinted, uint256 amountEth, uint256 amountBull, uint256 amountBear);
-    event LiquidityRemoved(address indexed sender, address indexed to, uint256 liquidityBurned, uint256 amountEth, uint256 amountBull, uint256 amountBear);
+    event LiquidityAdded(
+        address indexed sender,
+        address indexed to,
+        uint256 liquidityMinted,
+        uint256 amountEth,
+        uint256 amountBull,
+        uint256 amountBear
+    );
+    event LiquidityRemoved(
+        address indexed sender,
+        address indexed to,
+        uint256 liquidityBurned,
+        uint256 amountEth,
+        uint256 amountBull,
+        uint256 amountBear
+    );
     event Swapped(address indexed sender, address indexed to, TokenType tokenIn, TokenType tokenOut, uint256 amountIn, uint256 amountOut);
     event PriceRegistered(uint256 price, uint256 timestamp);
     event NFTPurchased(address indexed sender, address indexed to, uint256 price, uint256 amount);
     event NFTSold(address indexed sender, address indexed to, uint256 price, uint256 amount);
     event RoyaltyPaid(address indexed receiver, uint256 amount);
+
+    /// @notice returns address of the PiSwapRegistry contract
+    function registry() external returns (address);
+
+    /// @notice returns information about the underlying NFT
+    /// @return tokenAddress contract address of the underlying NFT
+    /// @return tokenId      token id of the underlying NFT
+    /// @return nftType      ERC721 or ERC1155 standard
+    function underlyingNFT()
+        external
+        view
+        returns (
+            address tokenAddress,
+            uint256 tokenId,
+            NFTType nftType
+        );
 
     /// @notice mint bull and bear tokens
     /// @param args see {Arguments-Mint}
@@ -76,31 +112,31 @@ interface IPiSwapMarket is Arguments {
     function buyNFT(Arguments.NFTSwap calldata args) external returns (bool);
 
     /// @notice see {PiSwapLibrary-mintOutGivenIn}
-    function mintOutGivenIn(uint256 _amountIn) external view returns (uint256 amountOut);
+    function mintOutGivenIn(uint256 amountIn) external view returns (uint256 amountOut);
 
     /// @notice see {PiSwapLibrary-mintInGivenOut}
-    function mintInGivenOut(uint256 _amountOut) external view returns (uint256 amountIn);
+    function mintInGivenOut(uint256 amountOut) external view returns (uint256 amountIn);
 
     /// @notice see {PiSwapLibrary-burnOutGivenIn}
-    function burnOutGivenIn(uint256 _amountIn) external view returns (uint256 amountOut);
+    function burnOutGivenIn(uint256 amountIn) external view returns (uint256 amountOut);
 
     /// @notice see {PiSwapLibrary-burnInGivenOut}
-    function burnInGivenOut(uint256 _amountOut) external view returns (uint256 amountIn);
+    function burnInGivenOut(uint256 amountOut) external view returns (uint256 amountIn);
 
     /// @notice calculate amount out with fee for an amount in
     /// @notice see {PiSwapLibrary-swapOutGivenIn}
     function swapOutGivenIn(
-        uint256 _amountIn,
-        TokenType _tokenIn,
-        TokenType _tokenOut
+        uint256 amountIn,
+        TokenType tokenIn,
+        TokenType tokenOut
     ) external view returns (uint256 amountOut);
 
     /// @notice calculate amount in with fee for an amount out
     /// @notice see {PiSwapLibrary-swapInGivenOut}
     function swapInGivenOut(
-        uint256 _amountOut,
-        TokenType _tokenIn,
-        TokenType _tokenOut
+        uint256 amountOut,
+        TokenType tokenIn,
+        TokenType tokenOut
     ) external view returns (uint256 amountIn);
 
     /// @return amount of ETH locked that can be used for NFT swaps
@@ -121,6 +157,12 @@ interface IPiSwapMarket is Arguments {
     /// @return current nftValue
     /// @dev returns latest oracle entry, if oracle is initialized, else returns calculated value
     function nftValue() external view returns (uint256);
+
+    /// @notice get an entry from the oracle array
+    /// @param index      of the entry to be retreived
+    /// @return price     value of the NFT
+    /// @return timestamp at which the price was added to the oracle array
+    function getOracleEntry(uint256 index) external returns (uint256 price, uint256 timestamp);
 
     /// @return amount of price snapshots taken
     function oracleLength() external view returns (uint256);

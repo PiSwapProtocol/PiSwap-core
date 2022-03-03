@@ -34,9 +34,9 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
     address public beneficiary;
 
     // market address => token data
-    mapping(address => NFT) public nftInfo;
+    mapping(address => NFT) private _nftInfo;
     // nft contract address => token id => market address
-    mapping(address => mapping(uint256 => address)) public markets;
+    mapping(address => mapping(uint256 => address)) private _markets;
 
     uint256 public fee;
     uint256 public oracleLength;
@@ -67,7 +67,7 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
 
     /// @notice see {IPiSwapRegistry-createMarket}
     function createMarket(address tokenAddress, uint256 tokenId) external returns (address market) {
-        require(markets[tokenAddress][tokenId] == address(0), _errMsg("createMarket", "MARKET_EXISTS"));
+        require(!marketExists(tokenAddress, tokenId), _errMsg("createMarket", "MARKET_EXISTS"));
         require(tokenAddress != address(this), _errMsg("createMarket", "INVALID"));
         NFT memory data = NFT({tokenAddress: tokenAddress, tokenId: tokenId});
 
@@ -80,12 +80,12 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
             require(_nftExistsERC1155(tokenAddress, tokenId), _errMsg("createMarket", "NON_EXISTENT_NFT"));
         }
         market = address(new BeaconProxyOptimized());
-        markets[tokenAddress][tokenId] = market;
+        _markets[tokenAddress][tokenId] = market;
 
         IMarket(market).initialize(tokenAddress, tokenId, nftType);
 
         // register token
-        nftInfo[market] = data;
+        _nftInfo[market] = data;
 
         emit MarketCreated(market, tokenAddress, tokenId);
     }
@@ -155,11 +155,16 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
         _setURI(newUri);
     }
 
+    /// @notice see {IPiSwapRegistry-getMarketForNFT}
+    function getMarketForNFT(address tokenAddress, uint256 tokenId) external view returns (address market) {
+        require(marketExists(tokenAddress, tokenId), _errMsg("getMarketForNFT", "MARKET_DOES_NOT_EXIST"));
+        market = _markets[tokenAddress][tokenId];
+    }
+
     /// @notice see {IPiSwapRegistry-marketExists}
     function marketExists(address tokenAddress, uint256 tokenId) public view returns (bool) {
-        address market = markets[tokenAddress][tokenId];
-        NFT memory data = nftInfo[market];
-        return data.tokenAddress != address(0);
+        address market = _markets[tokenAddress][tokenId];
+        return market != address(0);
     }
 
     /// @dev See {IERC1155-isApprovedForAll}.
@@ -171,7 +176,7 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
     }
 
     function _isMarket(address market) private view returns (bool) {
-        return nftInfo[market].tokenAddress != address(0);
+        return _nftInfo[market].tokenAddress != address(0);
     }
 
     function _getNFTType(address tokenAddress) private view returns (NFTType) {

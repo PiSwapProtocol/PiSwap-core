@@ -3,10 +3,6 @@ pragma solidity 0.8.11;
 
 import "@openzeppelin/contracts/proxy/beacon/IBeacon.sol";
 
-struct AddressSlot {
-    address value;
-}
-
 /// @notice based on OpenZeppelin Contracts v4.4.1 (proxy/beacon/BeaconProxy.sol)
 /// @dev removed all functions that are not used by BeaconProxy.sol to lower deployment gas costs
 /// @dev Beacon is set once upon initialization and cannot be changed afterwards
@@ -23,13 +19,6 @@ contract BeaconProxyOptimized {
         beacon = msg.sender;
         require(isContract(beacon), "ERC1967: new beacon is not a contract");
         require(isContract(IBeacon(beacon).implementation()), "ERC1967: beacon implementation is not a contract");
-    }
-
-    /**
-     * @dev Returns the current implementation address of the associated beacon.
-     */
-    function _implementation() internal view virtual returns (address) {
-        return IBeacon(beacon).implementation();
     }
 
     /**
@@ -78,19 +67,10 @@ contract BeaconProxyOptimized {
     }
 
     /**
-     * @dev Delegates the current call to the address returned by `_implementation()`.
-     *
-     * This function does not return to its internall call site, it will return directly to the external caller.
-     */
-    function _fallback() internal virtual {
-        _delegate(_implementation());
-    }
-
-    /**
      * @dev Fallback function that delegates calls to the address returned by `_implementation()`. Will run if no other
      * function in the contract matches the call data.
      */
     fallback() external virtual {
-        _fallback();
+        _delegate(IBeacon(beacon).implementation());
     }
 }

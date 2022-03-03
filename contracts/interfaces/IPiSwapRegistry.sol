@@ -57,8 +57,12 @@ interface IPiSwapRegistry {
     /// @notice sets new oracle length
     function oracleLength() external view returns (uint256);
 
-    /// @notice see {IERC1155-_setURI}.
-    function setURI(string calldata newUri) external;
+    /// @notice get market for an NFT identified by the token address and token id
+    /// @dev reverts if no market exists for the NFT
+    /// @param tokenAddress address of the NFT smart contract
+    /// @param tokenId      id of the NFT
+    /// @return market      address of the market contract
+    function getMarketForNFT(address tokenAddress, uint256 tokenId) external view returns (address market);
 
     /// @notice check whether market exists for a specific NFT
     /// @param tokenAddress NFT contract address
