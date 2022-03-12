@@ -247,7 +247,6 @@ contract PiSwapMarket is ContextUpgradeable, ReentrancyGuardUpgradeable, ERC1155
     /// @notice see {PiSwapLibrary-sellNFT}
     function sellNFT(NFTSwap calldata args) external ensure(args.deadline, "sellNFT") nonReentrant returns (bool) {
         uint256 nftValueAcc = nftValueAccumulated();
-        require(nftValueAcc >= args.slippage, _errMsg("sellNFT", "SLIPPAGE"));
         uint256 totalValue = nftValueAcc * args.amount;
         require(_sufficientLiquidityForSwap(nftValueAcc, args.amount), _errMsg("sellNFT", "INSUFFICIENT_LIQUIDITY"));
         address nftAddress = _nftData.tokenAddress;
@@ -271,6 +270,7 @@ contract PiSwapMarket is ContextUpgradeable, ReentrancyGuardUpgradeable, ERC1155
             _registry.withdraw(royalty, royaltyReceiver);
             emit RoyaltyPaid(royaltyReceiver, royalty);
         }
+        require(totalValue - royalty >= args.slippage, _errMsg("sellNFT", "SLIPPAGE"));
         _lockedEthCorrection -= int256(totalValue);
         _withdraw(TokenType.ETH, totalValue - royalty, args.useWeth, args.to);
         emit NFTSold(_msgSender(), args.to, nftValueAcc, args.amount);

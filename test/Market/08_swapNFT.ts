@@ -645,7 +645,7 @@ describe('Market', async () => {
 
         const tx = market721.sellNFT({
           amount: 1,
-          slippage: nftValue,
+          slippage: nftValue.sub(royalty),
           useWeth: false,
           to: accounts[0].address,
           deadline: c.unix2100,
@@ -672,7 +672,7 @@ describe('Market', async () => {
 
         const tx = market1155.sellNFT({
           amount: 1,
-          slippage: nftValue,
+          slippage: nftValue.sub(royalty),
           useWeth: false,
           to: accounts[0].address,
           deadline: c.unix2100,
