@@ -4,7 +4,7 @@ pragma solidity 0.8.11;
 import "../lib/Types.sol";
 
 interface IPiSwapRegistry {
-    event MarketCreated(address indexed market, address indexed NFTContract, uint256 indexed tokenId);
+    event MarketCreated(address indexed market, address indexed tokenAddress, uint256 indexed tokenId);
     event Deposit(address indexed sender, uint256 amount);
     event Withdrawal(address indexed sender, address indexed to, uint256 amount);
     event FeeUpdated(uint256 indexed feeBefore, uint256 indexed feeAfter);
