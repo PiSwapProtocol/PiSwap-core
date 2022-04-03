@@ -3,7 +3,7 @@
 # PiSwap-core
 
 [![CI Status](https://github.com/PiSwapProtocol/PiSwap-core/actions/workflows/tests.yml/badge.svg)](https://github.com/PiSwapProtocol/PiSwap-core/actions)
-[![License](https://img.shields.io/badge/License-AGPLv3-green.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![License](https://img.shields.io/badge/License-AGPLv3-green.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 This smart contract contains the core smart contracts for the PiSwap protocol. For a high level design specification, see the [whitepaper](https://docs.google.com/document/d/1B69RdEEovy2JXgLP8avUy09hAtH2--_dTBaSLMzqoIs/).
 
