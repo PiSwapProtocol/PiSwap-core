@@ -51,9 +51,17 @@ describe('Registry', async () => {
       expect((await market.underlyingNFT()).nftType).to.equal(c.NFTType.ERC1155);
     });
 
+    it('should fail if trying to create market for an EOA', async () => {
+      await expect(p.registry.createMarket(ethers.constants.AddressZero, 0)).to.be.revertedWith(
+        'Transaction reverted: function returned an unexpected amount of data'
+      );
+    });
+
     it('should fail if contract does not implement ERC165', async () => {
       const token = await (await ethers.getContractFactory('UpgradeTestA')).deploy();
-      await expect(p.registry.createMarket(token.address, 0)).to.be.reverted;
+      await expect(p.registry.createMarket(token.address, 0)).to.be.revertedWith(
+        "Transaction reverted: function selector was not recognized and there's no fallback function"
+      );
     });
 
     it('should fail if contract has not registered an ERC165 interface for ERC721 or ERC1155', async () => {
