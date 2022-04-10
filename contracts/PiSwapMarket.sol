@@ -361,7 +361,9 @@ contract PiSwapMarket is ContextUpgradeable, ReentrancyGuardUpgradeable, ERC1155
 
     /// @notice see {IPiSwapMarket-averageNftValue}
     function lockedEth() public view returns (uint256) {
-        uint256 lockedLiquidity = (getReserve(TokenType.LIQUIDITY) * 1 ether) / _registry.totalSupply(TokenType.LIQUIDITY.id());
+        uint256 currentSupply = _registry.totalSupply(TokenType.LIQUIDITY.id());
+        if (currentSupply == 0) return 0;
+        uint256 lockedLiquidity = (getReserve(TokenType.LIQUIDITY) * 1 ether) / currentSupply;
         assert(lockedLiquidity <= 1 ether);
         if (lockedLiquidity == 0) return 0;
         (uint256 ethReserve, uint256 tokenReserve) = _getSwapReserves(TokenType.ETH, TokenType.BULL);
