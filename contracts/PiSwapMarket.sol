@@ -57,7 +57,7 @@ contract PiSwapMarket is ContextUpgradeable, ReentrancyGuardUpgradeable, ERC1155
         address tokenAddress,
         uint256 tokenId,
         NFTType nftType
-    ) public initializer {
+    ) external initializer {
         __ERC1155Holder_init();
         __ERC721Holder_init();
         __ReentrancyGuard_init();

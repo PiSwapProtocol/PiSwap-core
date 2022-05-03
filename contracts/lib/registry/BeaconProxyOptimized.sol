@@ -24,7 +24,7 @@ contract BeaconProxyOptimized {
     /**
      * @dev taken from @openzeppelin/contracts/utils/Address.sol
      */
-    function isContract(address account) internal view returns (bool) {
+    function isContract(address account) private view returns (bool) {
         // This method relies on extcodesize, which returns 0 for contracts in
         // construction, since the code is only stored at the end of the
         // constructor execution.
@@ -41,7 +41,7 @@ contract BeaconProxyOptimized {
      *
      * This function does not return to its internall call site, it will return directly to the external caller.
      */
-    function _delegate(address implementation) internal virtual {
+    function _delegate(address implementation) private {
         assembly {
             // Copy msg.data. We take full control of memory in this inline assembly
             // block because it will not return to Solidity code. We overwrite the

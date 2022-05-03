@@ -22,7 +22,7 @@ library PiSwapLibrary {
     /// @notice calculates the total supply based on the amount of ETH deposited into the contract
     /// @param _depositedEth amount of ETH deposited into the smart contract
     /// @return              total supply
-    function totalSupply(uint256 _depositedEth) internal pure returns (uint256) {
+    function totalSupply(uint256 _depositedEth) private pure returns (uint256) {
         return MAX_SUPPLY - ((MAX_SUPPLY * STRETCH_FACTOR - 1) / (_depositedEth + STRETCH_FACTOR) + 1);
     }
 

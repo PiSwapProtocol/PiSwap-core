@@ -29,7 +29,7 @@ contract BeaconUpgradeable is IBeacon, OwnedUpgradeable {
         __Beacon_init_unchained(implementation_);
     }
 
-    function __Beacon_init_unchained(address implementation_) internal onlyInitializing {
+    function __Beacon_init_unchained(address implementation_) private onlyInitializing {
         _setImplementation(implementation_);
     }
 
@@ -63,10 +63,7 @@ contract BeaconUpgradeable is IBeacon, OwnedUpgradeable {
      * - `newImplementation` must be a contract.
      */
     function _setImplementation(address newImplementation) private {
-        require(
-            AddressUpgradeable.isContract(newImplementation),
-            "BeaconUpgradeable: implementation is not a contract"
-        );
+        require(AddressUpgradeable.isContract(newImplementation), "BeaconUpgradeable: implementation is not a contract");
         _implementation = newImplementation;
     }
 

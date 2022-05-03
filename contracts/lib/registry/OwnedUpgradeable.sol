@@ -19,7 +19,7 @@ contract OwnedUpgradeable is Initializable, ContextUpgradeable {
         __Owned_init_unchained(_initialOwner);
     }
 
-    function __Owned_init_unchained(address _initialOwner) internal onlyInitializing {
+    function __Owned_init_unchained(address _initialOwner) private onlyInitializing {
         _owner = _initialOwner;
         emit OwnershipTransferred(address(0), _initialOwner);
     }
