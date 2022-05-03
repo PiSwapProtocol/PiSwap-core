@@ -1,7 +1,9 @@
 import { ContractTransaction } from '@ethersproject/contracts';
-import { BigNumber } from 'ethers';
+import { BigNumber, BigNumberish } from 'ethers';
 import { ethers, upgrades } from 'hardhat';
 import {
+  BeaconProxyOptimized__factory,
+  BeaconUpgradeable__factory,
   ERC1155,
   ERC165,
   ERC721,
@@ -72,9 +74,19 @@ export class PiSwap {
     return this.deployMarket(nft);
   }
 
+  public async getMarketAddress(address: string, tokenId: BigNumberish): Promise<string> {
+    const salt = ethers.utils.solidityKeccak256(['address', 'uint256', 'uint256'], [address, tokenId, this.chainId]);
+    const marketAddress = await ethers.utils.getCreate2Address(
+      this.registry.address,
+      salt,
+      ethers.utils.keccak256(BeaconProxyOptimized__factory.bytecode)
+    );
+    return marketAddress;
+  }
+
   public async deployMarket(nft: { address: string; tokenId: string }): Promise<PiSwapMarket> {
-    const marketAddress = await this.getMarketAddressFromEvent(this.registry.createMarket(nft.address, nft.tokenId));
-    return this.getMarket(marketAddress);
+    await this.registry.createMarket(nft.address, nft.tokenId);
+    return this.getMarket(await this.getMarketAddress(nft.address, nft.tokenId));
   }
 
   public async deployERC721(): Promise<ERC721> {
@@ -94,11 +106,6 @@ export class PiSwap {
 
   public async getMarket(address: string): Promise<PiSwapMarket> {
     return PiSwapMarket__factory.connect(address, ethers.provider.getSigner());
-  }
-
-  public async getMarketAddressFromEvent(tx: Promise<ContractTransaction>): Promise<string> {
-    const receipt = await (await tx).wait();
-    return receipt.events![1].args!.market;
   }
 
   public getTokenId(market: PiSwapMarket, id: number): BigNumber {

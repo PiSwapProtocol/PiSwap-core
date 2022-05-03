@@ -24,17 +24,17 @@ describe('Registry', async () => {
     });
 
     it('should create a new market', async () => {
-      expect(await p.registry.marketExists(token.address, 0)).to.be.false;
-      await expect(p.registry.getMarketForNFT(token.address, 0)).to.be.revertedWith(
+      const tokenId = ethers.BigNumber.from(0);
+      expect(await p.registry.marketExists(token.address, tokenId)).to.be.false;
+      await expect(p.registry.getMarketForNFT(token.address, tokenId)).to.be.revertedWith(
         'PiSwapRegistry#getMarketForNFT: MARKET_DOES_NOT_EXIST'
       );
-      const tokenAddress = token.address;
-      const tokenId = ethers.BigNumber.from(0);
-      const tx = p.registry.createMarket(tokenAddress, tokenId);
-      market = await p.getMarket(await p.getMarketAddressFromEvent(tx));
-      await expect(tx).to.emit(p.registry, 'MarketCreated').withArgs(market.address, tokenAddress, tokenId);
-      expect(await p.registry.getMarketForNFT(tokenAddress, 0)).to.equal(market.address);
-      expect(await p.registry.marketExists(token.address, 0)).to.be.true;
+      const marketAddress = await p.getMarketAddress(token.address, tokenId);
+      const tx = p.registry.createMarket(token.address, tokenId);
+      await expect(tx).to.emit(p.registry, 'MarketCreated').withArgs(marketAddress, token.address, tokenId);
+      expect(await p.registry.getMarketForNFT(token.address, tokenId)).to.equal(marketAddress);
+      expect(await p.registry.marketExists(token.address, tokenId)).to.be.true;
+      market = await p.getMarket(marketAddress);
     });
 
     it('deployed market contract should get owner address from factory', async () => {

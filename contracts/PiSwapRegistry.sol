@@ -79,7 +79,9 @@ contract PiSwapRegistry is IPiSwapRegistry, BeaconUpgradeable, ERC1155SupplyUpgr
         } else {
             require(_nftExistsERC1155(tokenAddress, tokenId), _errMsg("createMarket", "NON_EXISTENT_NFT"));
         }
-        market = address(new BeaconProxyOptimized());
+
+        bytes32 salt = keccak256(abi.encodePacked(tokenAddress, tokenId, block.chainid));
+        market = address(new BeaconProxyOptimized{salt: salt}());
         _markets[tokenAddress][tokenId] = market;
 
         IMarket(market).initialize(tokenAddress, tokenId, nftType);
